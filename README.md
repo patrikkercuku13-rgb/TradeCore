@@ -1,0 +1,2 @@
+# TradeCore
+my journaling app
