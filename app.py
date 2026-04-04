@@ -1,56 +1,90 @@
 import streamlit as st
 import pandas as pd
-import yfinance as yf # La libreria magica per i prezzi
+import yfinance as yf
 
 st.set_page_config(page_title="Prop Performance Hub", layout="wide")
 
-if 'trades' not in st.session_state:
-    st.session_state.trades = []
+# Inizializzazione sessioni per non perdere i dati durante la navigazione
+if 'trades' not in st.session_state: st.session_state.trades = []
+if 'daily_recaps' not in st.session_state: st.session_state.daily_recaps = []
 
-# --- FUNZIONE RECUPERO PREZZI LIVE ---
+# --- FUNZIONE PREZZI LIVE ---
 def get_live_price(ticker):
     try:
         data = yf.Ticker(ticker)
-        # Prendiamo l'ultima chiusura disponibile
-        price = data.history(period="1d")['Close'].iloc[-1]
-        return round(price, 5)
-    except:
-        return 0.0
+        return round(data.history(period="1d")['Close'].iloc[-1], 5)
+    except: return 0.0
 
-# --- NAVIGAZIONE ---
+# --- SIDEBAR ---
 st.sidebar.title("🎛️ Navigation")
-page = st.sidebar.radio("Vai a:", ["🏠 Dashboard", "📝 Journal", "🔔 Alerts & Setup"])
+page = st.sidebar.radio("Vai a:", ["🏠 Dashboard", "📝 Journal", "🧠 Daily Psychology", "🔔 Alerts & Setup"])
 
+# --- PAGINA 1: DASHBOARD ---
 if page == "🏠 Dashboard":
     st.title("📊 Prop Analytics")
-    # ... (stesso codice di prima per la dashboard)
+    if st.session_state.trades:
+        df = pd.DataFrame(st.session_state.trades)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total PnL", f"$ {df['PnL'].sum():.2f}")
+        winrate = (len(df[df['PnL'] > 0]) / len(df)) * 100
+        c2.metric("Winrate", f"{winrate:.1f}%")
+        c3.metric("Trades", len(df))
+        st.line_chart(df["PnL"].cumsum())
 
+# --- PAGINA 2: JOURNAL ---
 elif page == "📝 Journal":
-    st.title("📓 Trading Journal")
-    
-    with st.form("inserimento_trade"):
-        st.subheader("Nuovo Trade")
-        
-        # INPUT TICKER
-        ticker_input = st.text_input("Inserisci Ticker (es: NQ=F, EURUSD=X, AAPL)", "NQ=F")
-        
-        # TASTO PER AGGIORNARE IL PREZZO
-        current_market_price = get_live_price(ticker_input)
-        st.write(f"🏷️ Prezzo attuale di mercato: **{current_market_price}**")
-        
-        col_a, col_b = st.columns(2)
-        prezzo_in = col_a.number_input("Tuo Prezzo Entrata", value=current_market_price, format="%.5f")
-        prezzo_out = col_b.number_input("Tuo Prezzo Uscita", format="%.5f")
-        
-        note = st.text_area("Note sul trade")
-        submit = st.form_submit_button("Registra Trade")
-        
-        if submit:
-            # Calcolo semplificato (poi lo affineremo per lotti/contratti)
-            pnl = (prezzo_out - prezzo_in) * 20 
-            st.session_state.trades.append({"Asset": ticker_input, "PnL": pnl, "Note": note})
-            st.success("Trade salvato!")
+    st.title("📓 Trade Log")
+    with st.form("trade_form"):
+        ticker = st.text_input("Ticker (es: NQ=F, EURUSD=X)", "NQ=F")
+        live_p = get_live_price(ticker)
+        st.write(f"Prezzo Live: **{live_p}**")
+        p_in = st.number_input("Entrata", value=live_p, format="%.5f")
+        p_out = st.number_input("Uscita", format="%.5f")
+        if st.form_submit_button("Salva Trade"):
+            pnl = (p_out - p_in) * 20 # Da personalizzare poi
+            st.session_state.trades.append({"Asset": ticker, "PnL": pnl})
+            st.success("Trade registrato!")
 
+# --- PAGINA 3: DAILY PSYCHOLOGY (LA TUA IDEA!) ---
+elif page == "🧠 Daily Psychology":
+    st.title("🌩️ Daily Recap & Mood")
+    st.subheader("Com'è andata oggi psicologicamente?")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    # Sistema a pulsanti per il Mood
+    with col1:
+        if st.button("🔴 TOUGH DAY \n (⛈️ Tempesta)"):
+            st.session_state.last_mood = "Tough Day"
+            st.error("Oggi è stata dura. Respira e stacca i monitor.")
+            
+    with col2:
+        if st.button("🟡 MIXED \n (☁️ Nuvola)"):
+            st.session_state.last_mood = "Mixed"
+            st.warning("Giornata così e così. Analizza gli errori.")
+            
+    with col3:
+        if st.button("🟢 GOOD DAY \n (☀️ Sole)"):
+            st.session_state.last_mood = "Good Day"
+            st.success("Grande focus! Continua così.")
+
+    st.divider()
+    
+    # Spazio per il Recap Lungo
+    recap_text = st.text_area("Scrivi il tuo Daily Recap (Note lunghe, errori, lezioni imparate...)", height=200)
+    
+    if st.button("Salva Recap Giornaliero"):
+        mood = st.session_state.get('last_mood', 'Non dichiarato')
+        st.session_state.daily_recaps.append({"Data": pd.Timestamp.now(), "Mood": mood, "Note": recap_text})
+        st.balloons()
+        st.success("Recap salvato nel database!")
+
+    # Storico dei Recap
+    if st.session_state.daily_recaps:
+        st.subheader("📖 Storico dei tuoi Recap")
+        st.table(pd.DataFrame(st.session_state.daily_recaps).iloc[::-1])
+
+# --- PAGINA 4: ALERTS ---
 elif page == "🔔 Alerts & Setup":
     st.title("⚙️ Setup")
-    st.write("Configura qui i tuoi parametri...")
+    st.info("Configurazioni notifiche in arrivo...")
