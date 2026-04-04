@@ -1,73 +1,76 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="Nasdaq & Global Journal", layout="wide")
-st.title("📊 Professional Trading Journal")
+# Configurazione Pagina Stile Pro
+st.set_page_config(page_title="Prop Performance Hub", layout="wide", initial_sidebar_state="expanded")
 
+# Inizializzazione Database Temporaneo
 if 'trades' not in st.session_state:
     st.session_state.trades = []
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None
 
-# --- SIDEBAR PER L'INSERIMENTO ---
-with st.sidebar:
-    st.header("📝 Registra Operazione")
-    
-    tipo_asset = st.selectbox("Tipo di Asset", ["Future (Nasdaq/ES)", "Azione", "Forex", "Commodity"])
-    strumento = st.text_input("Strumento (es. NQ, AAPL, EURUSD)", "NQ")
-    
-    col_a, col_b = st.columns(2)
-    prezzo_in = col_a.number_input("Prezzo Ingresso", value=0.0, format="%.5f")
-    prezzo_out = col_b.number_input("Prezzo Uscita", value=0.0, format="%.5f")
-    
-    quantita = st.number_input("Quantità (Lotti/Contratti/Azioni)", value=1.0)
+# --- SIDEBAR DI NAVIGAZIONE ---
+st.sidebar.title("🎛️ Navigation")
+page = st.sidebar.radio("Vai a:", ["🏠 Dashboard", "📝 Journal", "🔔 Alerts & Setup"])
 
-    # Logica di calcolo Profitto
-    pnl_calcolato = 0.0
-    if st.button("Calcola e Registra"):
-        diff = prezzo_out - prezzo_in
+# --- PAGINA 1: DASHBOARD ---
+if page == "🏠 Dashboard":
+    st.title("📊 Prop Analytics")
+    if not st.session_state.trades:
+        st.info("Nessun dato disponibile. Inserisci i tuoi primi trade nel Journal!")
+    else:
+        df = pd.DataFrame(st.session_state.trades)
+        # Metriche stile Prop Firm
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total PnL", f"$ {df['PnL'].sum():.2f}")
+        winrate = (len(df[df['PnL'] > 0]) / len(df)) * 100
+        c2.metric("Winrate", f"{winrate:.1f}%")
+        c3.metric("Profit Factor", "1.5") # Lo calcoleremo meglio dopo
+        c4.metric("Trades", len(df))
         
-        if tipo_asset == "Future (Nasdaq/ES)":
-            # Esempio Nasdaq: 1 punto = $20 (Micro NQ = $2) -> Usiamo $20 come standard Mini
-            moltiplicatore = 20 
-            pnl_calcolato = diff * moltiplicatore * quantita
-        elif tipo_asset == "Forex":
-            # Approssimazione standard Forex (1 lotto = 100k, 1 pip = $10)
-            pnl_calcolato = diff * 100000 * quantita
-        else: # Azioni e Commodity standard
-            pnl_calcolato = diff * quantita
-            
-        st.session_state.trades.append({
-            "Strumento": strumento,
-            "Tipo": tipo_asset,
-            "Ingresso": prezzo_in,
-            "Uscita": prezzo_out,
-            "Qty": quantita,
-            "PnL ($)": round(pnl_calcolato, 2)
-        })
-        st.success(f"Registrato: ${pnl_calcolato:.2f}")
+        st.subheader("Equity Curve")
+        st.line_chart(df["PnL"].cumsum())
 
-# --- DASHBOARD PRINCIPALE ---
-if st.session_state.trades:
-    df = pd.DataFrame(st.session_state.trades)
+# --- PAGINA 2: JOURNAL ---
+elif page == "📝 Journal":
+    st.title("📓 Trading Journal")
     
-    # Metriche
-    tot_pnl = df["PnL ($)"].sum()
-    winrate = (len(df[df["PnL ($)"] > 0]) / len(df)) * 100
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("PnL Totale", f"$ {tot_pnl:.2f}")
-    c2.metric("Winrate", f"{winrate:.1f}%")
-    c3.metric("Operazioni", len(df))
-    
-    # Grafico Equity
-    st.subheader("📈 Equity Line")
-    st.line_chart(df["PnL ($)"].cumsum())
+    with st.expander("✅ Trading Checklist (Obbligatoria)", expanded=True):
+        c1, c2 = st.columns(2)
+        check1 = c1.checkbox("Ho seguito il trend?")
+        check2 = c1.checkbox("Rischio/Rendimento corretto?")
+        check3 = c2.checkbox("Setup confermato?")
+        check4 = c2.checkbox("Emozioni sotto controllo?")
 
-    # Registro Tabella
-    st.subheader("📑 Registro Storico")
-    st.dataframe(df.iloc[::-1], use_container_width=True) # Mostra la tabella bella larga
+    with st.form("inserimento_trade"):
+        st.subheader("Nuovo Trade")
+        col_a, col_b, col_c = st.columns(3)
+        asset = col_a.text_input("Strumento (es. MNQ, EURUSD)")
+        prezzo_in = col_b.number_input("Entrata", format="%.5f")
+        prezzo_out = col_c.number_input("Uscita", format="%.5f")
+        
+        note = st.text_area("Daily Recap / Note sul trade")
+        
+        submit = st.form_submit_button("Registra Trade")
+        
+        if submit:
+            if not (check1 and check2 and check3 and check4):
+                st.error("Devi completare tutta la checklist prima di registrare!")
+            else:
+                pnl = (prezzo_out - prezzo_in) * 20 # Esempio per NQ
+                st.session_state.trades.append({"Asset": asset, "PnL": pnl, "Note": note})
+                st.success("Trade salvato con successo!")
 
-    if st.button("Svuota Diario"):
-        st.session_state.trades = []
-        st.rerun()
-else:
-    st.info("Benvenuto! Usa la barra a sinistra per inserire il tuo primo trade.")
+# --- PAGINA 3: ALERTS & SETUP ---
+elif page == "🔔 Alerts & Setup":
+    st.title("⚙️ Configurazioni & Notifiche")
+    st.session_state.user_type = st.selectbox("Cosa tradi principalmente?", ["Futures (Nasdaq/ES)", "Forex", "Azioni"])
+    
+    st.subheader("Configura Alert")
+    if st.checkbox("Attiva notifiche 15min prima dell'apertura"):
+        st.success(f"Notifiche attivate per il mercato {st.session_state.user_type}!")
+        if st.session_state.user_type == "Futures (Nasdaq/ES)":
+            st.write("⏰ Riceverai un alert alle 15:15 (Sessione USA)")
+        else:
+            st.write("⏰ Riceverai un alert alle 08:45 (Sessione London)")
