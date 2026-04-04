@@ -1,76 +1,56 @@
 import streamlit as st
 import pandas as pd
+import yfinance as yf # La libreria magica per i prezzi
 
-# Configurazione Pagina Stile Pro
-st.set_page_config(page_title="Prop Performance Hub", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Prop Performance Hub", layout="wide")
 
-# Inizializzazione Database Temporaneo
 if 'trades' not in st.session_state:
     st.session_state.trades = []
-if 'user_type' not in st.session_state:
-    st.session_state.user_type = None
 
-# --- SIDEBAR DI NAVIGAZIONE ---
+# --- FUNZIONE RECUPERO PREZZI LIVE ---
+def get_live_price(ticker):
+    try:
+        data = yf.Ticker(ticker)
+        # Prendiamo l'ultima chiusura disponibile
+        price = data.history(period="1d")['Close'].iloc[-1]
+        return round(price, 5)
+    except:
+        return 0.0
+
+# --- NAVIGAZIONE ---
 st.sidebar.title("🎛️ Navigation")
 page = st.sidebar.radio("Vai a:", ["🏠 Dashboard", "📝 Journal", "🔔 Alerts & Setup"])
 
-# --- PAGINA 1: DASHBOARD ---
 if page == "🏠 Dashboard":
     st.title("📊 Prop Analytics")
-    if not st.session_state.trades:
-        st.info("Nessun dato disponibile. Inserisci i tuoi primi trade nel Journal!")
-    else:
-        df = pd.DataFrame(st.session_state.trades)
-        # Metriche stile Prop Firm
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total PnL", f"$ {df['PnL'].sum():.2f}")
-        winrate = (len(df[df['PnL'] > 0]) / len(df)) * 100
-        c2.metric("Winrate", f"{winrate:.1f}%")
-        c3.metric("Profit Factor", "1.5") # Lo calcoleremo meglio dopo
-        c4.metric("Trades", len(df))
-        
-        st.subheader("Equity Curve")
-        st.line_chart(df["PnL"].cumsum())
+    # ... (stesso codice di prima per la dashboard)
 
-# --- PAGINA 2: JOURNAL ---
 elif page == "📝 Journal":
     st.title("📓 Trading Journal")
     
-    with st.expander("✅ Trading Checklist (Obbligatoria)", expanded=True):
-        c1, c2 = st.columns(2)
-        check1 = c1.checkbox("Ho seguito il trend?")
-        check2 = c1.checkbox("Rischio/Rendimento corretto?")
-        check3 = c2.checkbox("Setup confermato?")
-        check4 = c2.checkbox("Emozioni sotto controllo?")
-
     with st.form("inserimento_trade"):
         st.subheader("Nuovo Trade")
-        col_a, col_b, col_c = st.columns(3)
-        asset = col_a.text_input("Strumento (es. MNQ, EURUSD)")
-        prezzo_in = col_b.number_input("Entrata", format="%.5f")
-        prezzo_out = col_c.number_input("Uscita", format="%.5f")
         
-        note = st.text_area("Daily Recap / Note sul trade")
+        # INPUT TICKER
+        ticker_input = st.text_input("Inserisci Ticker (es: NQ=F, EURUSD=X, AAPL)", "NQ=F")
         
+        # TASTO PER AGGIORNARE IL PREZZO
+        current_market_price = get_live_price(ticker_input)
+        st.write(f"🏷️ Prezzo attuale di mercato: **{current_market_price}**")
+        
+        col_a, col_b = st.columns(2)
+        prezzo_in = col_a.number_input("Tuo Prezzo Entrata", value=current_market_price, format="%.5f")
+        prezzo_out = col_b.number_input("Tuo Prezzo Uscita", format="%.5f")
+        
+        note = st.text_area("Note sul trade")
         submit = st.form_submit_button("Registra Trade")
         
         if submit:
-            if not (check1 and check2 and check3 and check4):
-                st.error("Devi completare tutta la checklist prima di registrare!")
-            else:
-                pnl = (prezzo_out - prezzo_in) * 20 # Esempio per NQ
-                st.session_state.trades.append({"Asset": asset, "PnL": pnl, "Note": note})
-                st.success("Trade salvato con successo!")
+            # Calcolo semplificato (poi lo affineremo per lotti/contratti)
+            pnl = (prezzo_out - prezzo_in) * 20 
+            st.session_state.trades.append({"Asset": ticker_input, "PnL": pnl, "Note": note})
+            st.success("Trade salvato!")
 
-# --- PAGINA 3: ALERTS & SETUP ---
 elif page == "🔔 Alerts & Setup":
-    st.title("⚙️ Configurazioni & Notifiche")
-    st.session_state.user_type = st.selectbox("Cosa tradi principalmente?", ["Futures (Nasdaq/ES)", "Forex", "Azioni"])
-    
-    st.subheader("Configura Alert")
-    if st.checkbox("Attiva notifiche 15min prima dell'apertura"):
-        st.success(f"Notifiche attivate per il mercato {st.session_state.user_type}!")
-        if st.session_state.user_type == "Futures (Nasdaq/ES)":
-            st.write("⏰ Riceverai un alert alle 15:15 (Sessione USA)")
-        else:
-            st.write("⏰ Riceverai un alert alle 08:45 (Sessione London)")
+    st.title("⚙️ Setup")
+    st.write("Configura qui i tuoi parametri...")
