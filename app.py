@@ -4,12 +4,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-# --- CONFIGURAZIONE SUPABASE ---
-URL: str = "https://aurjuibhbuinxzirpjkt.supabase.co"
-KEY: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cmp1aWJoYnVpbnh6aXJwamt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODE0MjEsImV4cCI6MjA5MTA1NzQyMX0.xSZBDGACcF6yDpkvuKQZottdKINFM0JM3iuRrI987lE"
-supabase: Client = create_client(URL, KEY)
-
-# --- CONFIGURAZIONE PAGINA ---
+# --- CONFIGURAZIONE PAGINA (DEVE ESSERE IN CIMA!) ---
 st.set_page_config(page_title="TradeCore | Professional Dashboard", layout="wide")
 
 # CSS per il look Bianco e Nero (Dark Mode)
@@ -20,6 +15,11 @@ st.markdown("""
     .stMetric { background-color: #1a1c23; padding: 15px; border-radius: 10px; border: 1px solid #333; }
     </style>
     """, unsafe_allow_html=True)
+
+# --- CONFIGURAZIONE SUPABASE ---
+URL: str = "https://aurjuibhbuinxzirpjkt.supabase.co"
+KEY: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cmp1aWJoYnVpbnh6aXJwamt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODE0MjEsImV4cCI6MjA5MTA1NzQyMX0.xSZBDGACcF6yDpkvuKQZottdKINFM0JM3iuRrI987lE"
+supabase: Client = create_client(URL, KEY)
 
 # --- FUNZIONI DATABASE ---
 def fetch_trades():
@@ -91,7 +91,6 @@ with tab1:
 
 with tab2:
     if not df.empty:
-        # Formattazione tabella per renderla figa
         st.dataframe(df[['created_at', 'asset', 'profit', 'pips', 'contracts', 'psychology', 'notes']].sort_values(by='created_at', ascending=False), 
                      use_container_width=True)
     else:
@@ -101,4 +100,3 @@ with tab3:
     st.subheader("Account Settings")
     new_balance = st.number_input("Starting Capital", value=initial_balance)
     st.button("Update Account Settings (Coming Soon)")
-       
