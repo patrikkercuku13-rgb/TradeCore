@@ -2,18 +2,18 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime
 
 # ==========================================
-# 1. CONFIGURAZIONE ESTETICA (TOTAL BLACK)
+# 1. CONFIGURAZIONE INTERFACCIA PRO
 # ==========================================
 st.set_page_config(
-    page_title="TradeCore | The Professional Vault",
+    page_title="TradeCore | Elite Dashboard",
     page_icon="📈",
     layout="wide"
 )
 
+# CSS per look Total Black e scritte bianche
 st.markdown("""
     <style>
     .main { background-color: #000000; color: #ffffff; }
@@ -21,149 +21,164 @@ st.markdown("""
         background-color: #0a0a0a; 
         padding: 20px; 
         border-radius: 10px; 
-        border: 1px solid #222; 
+        border: 1px solid #333; 
     }
     div.stButton > button { 
         background-color: #ffffff; 
         color: #000000; 
-        border-radius: 5px; 
+        border-radius: 4px; 
         font-weight: bold; 
         width: 100%;
-        height: 3em;
+        border: none;
     }
-    .stTabs [data-baseweb="tab-list"] { gap: 24px; }
-    .stTabs [data-baseweb="tab"] { color: #888; }
-    .stTabs [data-baseweb="tab"]:hover { color: #fff; }
+    div.stButton > button:hover { background-color: #cccccc; }
+    .stTabs [data-baseweb="tab-list"] { gap: 20px; }
+    .stTabs [data-baseweb="tab"] { color: #888; font-weight: bold; }
     .stTabs [aria-selected="true"] { color: #fff; border-bottom-color: #fff; }
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. CONNESSIONE DATABASE
+# 2. CONNESSIONE SUPABASE
 # ==========================================
 URL = "https://aurjuibhbuinxzirpjkt.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cmp1aWJoYnVpbnh6aXJwamt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODE0MjEsImV4cCI6MjA5MTA1NzQyMX0.xSZBDGACcF6yDpkvuKQZottdKINFM0JM3iuRrI987lE"
 
 @st.cache_resource
-def get_supabase():
+def init_connection():
     return create_client(URL, KEY)
 
-supabase = get_supabase()
+supabase = init_connection()
 
 # ==========================================
-# 3. FUNZIONI OPERATIVE (FIXED ORDER)
+# 3. FUNZIONI DATI
 # ==========================================
-def load_data():
+def get_trades():
     try:
-        # CORREZIONE: rimosso 'descending', aggiunto 'desc' nel metodo corretto
-        res = supabase.table('trades').select("*").order('created_at').execute()
-        return pd.DataFrame(res.data)
-    except Exception as e:
+        # Recupero dati ordinati per data
+        query = supabase.table('trades').select("*").order('created_at').execute()
+        return pd.DataFrame(query.data)
+    except Exception:
         return pd.DataFrame()
 
-def save_to_db(payload):
+def push_trade(payload):
     try:
         supabase.table('trades').insert(payload).execute()
         return True
     except Exception as e:
-        st.error(f"Errore Database: {e}")
+        st.error(f"Errore invio: {e}")
         return False
 
 # ==========================================
-# 4. LOGICA DI CALCOLO & SESSIONE
+# 4. LOGICA DI SESSIONE
 # ==========================================
-if 'capitale_iniziale' not in st.session_state:
-    st.session_state.capitale_iniziale = 5000.0
+if 'balance_init' not in st.session_state:
+    st.session_state.balance_init = 5000.0
 
-df = load_data()
+df = get_trades()
 
-# Processamento Dati
+# Calcolo metriche in tempo reale
 if not df.empty:
     df['profit'] = pd.to_numeric(df['profit'], errors='coerce').fillna(0)
-    total_pl = df['profit'].sum()
-    current_balance = st.session_state.capitale_iniziale + total_pl
+    net_profit = df['profit'].sum()
+    current_bal = st.session_state.balance_init + net_profit
     win_rate = (len(df[df['profit'] > 0]) / len(df)) * 100
-    avg_win = df[df['profit'] > 0]['profit'].mean() if not df[df['profit'] > 0].empty else 0
+    trades_count = len(df)
 else:
-    total_pl, current_balance, win_rate, avg_win = 0, st.session_state.capitale_iniziale, 0, 0
+    net_profit, current_bal, win_rate, trades_count = 0.0, st.session_state.balance_init, 0.0, 0
 
 # ==========================================
-# 5. HEADER & METRICHE PRO
+# 5. LAYOUT DASHBOARD
 # ==========================================
-st.title("TRADECORE ENGINE")
-st.caption("CONNECTED TO SUPABASE CLOUD • VERSION 1.6")
+st.title("TRADECORE SYSTEM")
+st.caption(f"LIVE CLOUD CONNECTION | {datetime.now().strftime('%d %B %Y')}")
 
-m1, m2, m3, m4 = st.columns(4)
-with m1:
-    st.metric("EQUITY", f"€{current_balance:,.2f}")
-with m2:
-    st.metric("NET P/L", f"€{total_pl:,.2f}", delta=f"{total_pl:,.2f}")
-with m3:
-    st.metric("WIN RATE", f"{win_rate:.1f}%")
-with m4:
-    st.metric("AVG WIN", f"€{avg_win:,.2f}")
+col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+col_m1.metric("TOTAL EQUITY", f"€{current_bal:,.2f}")
+col_m2.metric("NET P/L", f"€{net_profit:,.2f}", delta=f"{net_profit:,.2f}")
+col_m3.metric("WIN RATE", f"{win_rate:.1f}%")
+col_m4.metric("EXECUTIONS", trades_count)
 
 st.divider()
 
 # ==========================================
-# 6. SIDEBAR: INSERIMENTO PROFESSIONALE
+# 6. SIDEBAR: TERMINALE DI IMMISSIONE
 # ==========================================
 with st.sidebar:
-    st.header("⚡ EXECUTION DESK")
-    with st.form("input_form"):
-        asset = st.selectbox("Asset", ["NAS100", "US30", "GER40", "GOLD", "EURUSD", "BTCUSD"])
-        col1, col2 = st.columns(2)
-        with col1:
-            p_l = st.number_input("Profit/Loss (€)", step=1.0)
-            pips = st.number_input("Pips/Points", step=0.1)
-        with col2:
-            lots = st.number_input("Lots", value=0.1, step=0.01)
-            tf = st.selectbox("TF", ["M1", "M5", "M15", "H1", "H4", "D1"])
-            
-        setup = st.text_input("Setup Name", placeholder="es. IFVG + MSS")
+    st.header("⚡ EXECUTION UNIT")
+    with st.form("trade_entry", clear_on_submit=True):
+        market = st.selectbox("Market Asset", ["NAS100", "US30", "GER40", "GOLD", "EURUSD", "BTCUSD"])
         
-        st.subheader("🧠 PSYCHOLOGY")
-        psy = st.select_slider("Mood", options=["REVENGE", "TOUGH", "CALM", "FOCUSED", "GOD MODE"], value="CALM")
-        notes = st.text_area("Review", placeholder="Perché hai preso questo trade?")
+        c1, c2 = st.columns(2)
+        with c1:
+            p_val = st.number_input("Profit/Loss (€)", step=1.0)
+            pip_val = st.number_input("Pips/Points", step=0.1)
+        with c2:
+            lot_val = st.number_input("Lots Size", value=0.1, step=0.01)
+            tf_val = st.selectbox("Timeframe", ["M1", "M5", "M15", "H1", "H4", "D1"])
         
-        if st.form_submit_button("COMMIT TRADE"):
-            new_data = {
-                "asset": asset, "profit": p_l, "pips": pips, 
-                "contracts": lots, "timeframe": tf, "setup_type": setup,
-                "psychology": psy, "notes": notes
+        setup_name = st.text_input("Setup Details", placeholder="e.g. IFVG + MSS")
+        
+        st.markdown("### 🧠 PSYCHOLOGY")
+        mood = st.select_slider("State of Mind", options=["REVENGE", "TOUGH", "CALM", "FOCUSED", "GOD MODE"], value="CALM")
+        comment = st.text_area("Trade Notes", placeholder="Descrivi il feeling dell'operazione...")
+        
+        if st.form_submit_button("LOCK DATA INTO CLOUD"):
+            payload = {
+                "asset": market, "profit": p_val, "pips": pip_val,
+                "contracts": lot_val, "timeframe": tf_val, "setup_type": setup_name,
+                "psychology": mood, "notes": comment
             }
-            if save_to_db(new_data):
-                st.success("DATA SECURED")
+            if push_trade(payload):
+                st.toast("DATA ENCRYPTED & SAVED", icon="🛡️")
                 st.rerun()
 
 # ==========================================
 # 7. SEZIONI ANALITICHE (TABS)
 # ==========================================
-tab1, tab2, tab3, tab4 = st.tabs(["📈 GROWTH", "📝 JOURNAL", "📊 DATA", "⚙️ SETTINGS"])
+t_growth, t_journal, t_data, t_settings = st.tabs(["📊 GROWTH", "📜 JOURNAL", "🧬 ANALYTICS", "⚙️ SETTINGS"])
 
-with tab1:
+with t_growth:
     if not df.empty:
-        df['equity_curve'] = st.session_state.capitale_iniziale + df['profit'].cumsum()
-        fig = px.line(df, y='equity_curve', title='CAPITAL GROWTH OVER TIME',
-                     color_discrete_sequence=['#ffffff'], template="plotly_dark")
-        fig.update_layout(xaxis_title="Trades", yaxis_title="Balance (€)")
-        st.plotly_chart(fig, use_container_width=True)
+        df['equity_line'] = st.session_state.balance_init + df['profit'].cumsum()
+        fig_growth = px.line(df, y='equity_line', title='CAPITAL EVOLUTION', 
+                            template="plotly_dark", color_discrete_sequence=['#ffffff'])
+        fig_growth.update_traces(line=dict(width=3))
+        st.plotly_chart(fig_growth, use_container_width=True)
     else:
-        st.info("Inizia registrando il tuo trade da +142 nella sidebar!")
+        st.info("Inizia caricando il tuo trade da +142 dalla sidebar laterale.")
 
-with tab2:
-    st.subheader("Trading Journal")
+with t_journal:
+    st.subheader("Historical Logbook")
     if not df.empty:
-        # Visualizziamo i dati in modo pulito
-        journal_df = df[['created_at', 'asset', 'profit', 'setup_type', 'psychology', 'notes']].iloc[::-1]
-        st.table(journal_df)
+        # Visualizzazione pulita invertita (ultimo in alto)
+        st.dataframe(df[['created_at', 'asset', 'profit', 'setup_type', 'psychology', 'notes']].iloc[::-1], use_container_width=True)
     else:
-        st.write("Ancora nessun record.")
+        st.write("No records found in database.")
 
-with tab3:
-    st.subheader("Performance Metrics")
+with t_data:
     if not df.empty:
-        c1, c2 = st.columns(2)
-        with c1:
-            asset_stats = df.groupby('asset')['profit'].sum().reset_index()
-            fig_bar = px.bar(asset_stats, x='asset', y='profit', title="Profit by Asset", color='
+        ca1, ca2 = st.columns(2)
+        with ca1:
+            st.subheader("Profit by Asset")
+            fig_asset = px.bar(df.groupby('asset')['profit'].sum().reset_index(), x='asset', y='profit', template="plotly_dark")
+            st.plotly_chart(fig_asset, use_container_width=True)
+        with ca2:
+            st.subheader("Psychology Impact")
+            fig_psy = px.box(df, x='psychology', y='profit', template="plotly_dark")
+            st.plotly_chart(fig_psy, use_container_width=True)
+    else:
+        st.info("Awaiting more data for deep analysis.")
+
+with t_settings:
+    st.subheader("Vault Configuration")
+    st.session_state.balance_init = st.number_input("Starting Capital (€)", value=st.session_state.balance_init)
+    st.markdown(f"**Database Status:** Connected to `{URL.split('//')[1]}`")
+    if st.button("Refresh Connection"):
+        st.rerun()
+
+# ==========================================
+# 8. FOOTER
+# ==========================================
+st.markdown("---")
+st.caption("TradeCore Architecture | v1.7 | Developed for Elite Performance")
