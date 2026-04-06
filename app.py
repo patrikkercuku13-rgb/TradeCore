@@ -4,181 +4,165 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-# ==========================================
-# 1. CONFIGURAZIONE INTERFACCIA PRO
-# ==========================================
-st.set_page_config(
-    page_title="TradeCore | Elite Dashboard",
-    page_icon="📈",
-    layout="wide"
-)
+# 1. PAGE CONFIG
+st.set_page_config(page_title="TradeCore | Elite Vault", layout="wide")
 
-# CSS per look Total Black e scritte bianche
+# CSS for Dark Mode and Sidebar Navigation
 st.markdown("""
     <style>
-    .main { background-color: #000000; color: #ffffff; }
-    .stMetric { 
-        background-color: #0a0a0a; 
-        padding: 20px; 
-        border-radius: 10px; 
-        border: 1px solid #333; 
-    }
-    div.stButton > button { 
-        background-color: #ffffff; 
-        color: #000000; 
-        border-radius: 4px; 
-        font-weight: bold; 
-        width: 100%;
-        border: none;
-    }
-    div.stButton > button:hover { background-color: #cccccc; }
-    .stTabs [data-baseweb="tab-list"] { gap: 20px; }
-    .stTabs [data-baseweb="tab"] { color: #888; font-weight: bold; }
-    .stTabs [aria-selected="true"] { color: #fff; border-bottom-color: #fff; }
+    .main { background-color: #000000; color: white; }
+    [data-testid="stSidebar"] { background-color: #0a0a0a; border-right: 1px solid #222; }
+    .stMetric { background-color: #111; border: 1px solid #222; padding: 20px; border-radius: 10px; }
+    div.stButton > button { background-color: white; color: black; font-weight: bold; border-radius: 4px; border: none; }
+    div.stButton > button:hover { background-color: #ddd; }
     </style>
     """, unsafe_allow_html=True)
 
-# ==========================================
-# 2. CONNESSIONE SUPABASE
-# ==========================================
+# 2. DATABASE CONNECTION
 URL = "https://aurjuibhbuinxzirpjkt.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cmp1aWJoYnVpbnh6aXJwamt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODE0MjEsImV4cCI6MjA5MTA1NzQyMX0.xSZBDGACcF6yDpkvuKQZottdKINFM0JM3iuRrI987lE"
+supabase = create_client(URL, KEY)
 
-@st.cache_resource
-def init_connection():
-    return create_client(URL, KEY)
-
-supabase = init_connection()
-
-# ==========================================
-# 3. FUNZIONI DATI
-# ==========================================
-def get_trades():
+# 3. DATA ENGINE
+def load_data():
     try:
-        # Recupero dati ordinati per data
-        query = supabase.table('trades').select("*").order('created_at').execute()
-        return pd.DataFrame(query.data)
-    except Exception:
-        return pd.DataFrame()
+        res = supabase.table('trades').select("*").order('created_at').execute()
+        return pd.DataFrame(res.data)
+    except: return pd.DataFrame()
 
-def push_trade(payload):
-    try:
-        supabase.table('trades').insert(payload).execute()
-        return True
-    except Exception as e:
-        st.error(f"Errore invio: {e}")
-        return False
+df = load_data()
+if 'start_cap' not in st.session_state: st.session_state.start_cap = 5000.0
 
-# ==========================================
-# 4. LOGICA DI SESSIONE
-# ==========================================
-if 'balance_init' not in st.session_state:
-    st.session_state.balance_init = 5000.0
-
-df = get_trades()
-
-# Calcolo metriche in tempo reale
-if not df.empty:
-    df['profit'] = pd.to_numeric(df['profit'], errors='coerce').fillna(0)
-    net_profit = df['profit'].sum()
-    current_bal = st.session_state.balance_init + net_profit
-    win_rate = (len(df[df['profit'] > 0]) / len(df)) * 100
-    trades_count = len(df)
-else:
-    net_profit, current_bal, win_rate, trades_count = 0.0, st.session_state.balance_init, 0.0, 0
-
-# ==========================================
-# 5. LAYOUT DASHBOARD
-# ==========================================
-st.title("TRADECORE SYSTEM")
-st.caption(f"LIVE CLOUD CONNECTION | {datetime.now().strftime('%d %B %Y')}")
-
-col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-col_m1.metric("TOTAL EQUITY", f"€{current_bal:,.2f}")
-col_m2.metric("NET P/L", f"€{net_profit:,.2f}", delta=f"{net_profit:,.2f}")
-col_m3.metric("WIN RATE", f"{win_rate:.1f}%")
-col_m4.metric("EXECUTIONS", trades_count)
-
-st.divider()
-
-# ==========================================
-# 6. SIDEBAR: TERMINALE DI IMMISSIONE
-# ==========================================
+# 4. SIDEBAR NAVIGATION
 with st.sidebar:
-    st.header("⚡ EXECUTION UNIT")
-    with st.form("trade_entry", clear_on_submit=True):
-        market = st.selectbox("Market Asset", ["NAS100", "US30", "GER40", "GOLD", "EURUSD", "BTCUSD"])
+    st.title("TRADECORE")
+    st.caption("Elite Trading OS v3.1")
+    st.divider()
+    
+    # Navigation Menu
+    menu = st.radio("SELECT MODULE", 
+                    ["DASHBOARD", "LOG TRADE", "PSYCHOLOGY", "DAILY RECAP", "SETTINGS"])
+    
+    st.divider()
+    if not df.empty:
+        # Filter out rows that are only psychology or daily recaps (no profit)
+        trade_df = df.dropna(subset=['net_profit'])
+        net_pl = trade_df['net_profit'].sum()
+        st.metric("TOTAL NET P/L", f"€{net_pl:,.2f}", delta=f"{net_pl:,.2f}")
+        st.metric("ACCOUNT BALANCE", f"€{st.session_state.start_cap + net_pl:,.2f}")
+
+# ==========================================
+# MODULE 1: DASHBOARD
+# ==========================================
+if menu == "DASHBOARD":
+    st.header("📈 PERFORMANCE ANALYTICS")
+    
+    trade_df = df.dropna(subset=['net_profit']) if not df.empty else pd.DataFrame()
+
+    if not trade_df.empty:
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("EXECUTIONS", len(trade_df))
+        m2.metric("WIN RATE", f"{(len(trade_df[trade_df['net_profit'] > 0]) / len(trade_df)) * 100:.1f}%")
+        m3.metric("AVG TRADE", f"€{trade_df['net_profit'].mean():,.2f}")
         
-        c1, c2 = st.columns(2)
+        # Profit Factor Calculation
+        pos = trade_df[trade_df['net_profit'] > 0]['net_profit'].sum()
+        neg = abs(trade_df[trade_df['net_profit'] < 0]['net_profit'].sum())
+        pf = round(pos / neg, 2) if neg != 0 else "MAX"
+        m4.metric("PROFIT FACTOR", pf)
+
+        st.divider()
+        trade_df['equity'] = st.session_state.start_cap + trade_df['net_profit'].cumsum()
+        fig = px.line(trade_df, y='equity', title="EQUITY CURVE", template="plotly_dark", color_discrete_sequence=['white'])
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.subheader("RECENT TRADES")
+        st.dataframe(trade_df.sort_values('created_at', ascending=False).head(10), use_container_width=True)
+    else:
+        st.info("The vault is empty. Go to 'LOG TRADE' to start.")
+
+# ==========================================
+# MODULE 2: LOG TRADE
+# ==========================================
+elif menu == "LOG TRADE":
+    st.header("⚡ EXECUTION TERMINAL")
+    with st.form("trade_form", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
         with c1:
-            p_val = st.number_input("Profit/Loss (€)", step=1.0)
-            pip_val = st.number_input("Pips/Points", step=0.1)
+            asset = st.selectbox("Instrument", ["NAS100", "US30", "GOLD", "EURUSD", "BTCUSD"])
+            side = st.selectbox("Side", ["LONG", "SHORT"])
+            lots = st.number_input("Lots", value=0.10, step=0.01)
         with c2:
-            lot_val = st.number_input("Lots Size", value=0.1, step=0.01)
-            tf_val = st.selectbox("Timeframe", ["M1", "M5", "M15", "H1", "H4", "D1"])
-        
-        setup_name = st.text_input("Setup Details", placeholder="e.g. IFVG + MSS")
-        
-        st.markdown("### 🧠 PSYCHOLOGY")
-        mood = st.select_slider("State of Mind", options=["REVENGE", "TOUGH", "CALM", "FOCUSED", "GOD MODE"], value="CALM")
-        comment = st.text_area("Trade Notes", placeholder="Descrivi il feeling dell'operazione...")
-        
-        if st.form_submit_button("LOCK DATA INTO CLOUD"):
-            payload = {
-                "asset": market, "profit": p_val, "pips": pip_val,
-                "contracts": lot_val, "timeframe": tf_val, "setup_type": setup_name,
-                "psychology": mood, "notes": comment
+            entry = st.number_input("Entry Price", format="%.5f")
+            exit_p = st.number_input("Exit Price", format="%.5f")
+            setup = st.text_input("Setup Name", placeholder="IFVG, Breaker, etc.")
+        with c3:
+            gross = st.number_input("Gross P/L (€)", value=0.0)
+            comm = st.number_input("Commissions (€)", value=0.0)
+            st.markdown("### Total Net")
+            st.write(f"€{gross - comm:.2f}")
+
+        if st.form_submit_button("SUBMIT TRADE"):
+            data = {
+                "asset": asset, "side": side, "entry_price": entry, "exit_price": exit_p,
+                "lots": lots, "gross_profit": gross, "commissions": comm,
+                "net_profit": gross - comm, "setup_type": setup
             }
-            if push_trade(payload):
-                st.toast("DATA ENCRYPTED & SAVED", icon="🛡️")
-                st.rerun()
+            supabase.table('trades').insert(data).execute()
+            st.success("Trade Secured!")
+            st.rerun()
 
 # ==========================================
-# 7. SEZIONI ANALITICHE (TABS)
+# MODULE 3: PSYCHOLOGY
 # ==========================================
-t_growth, t_journal, t_data, t_settings = st.tabs(["📊 GROWTH", "📜 JOURNAL", "🧬 ANALYTICS", "⚙️ SETTINGS"])
+elif menu == "PSYCHOLOGY":
+    st.header("🧠 MINDSET TRACKER")
+    with st.form("psy_form", clear_on_submit=True):
+        mood = st.select_slider("Current State", options=["REVENGE", "TOUGH", "CALM", "FOCUSED", "GOD MODE"])
+        notes = st.text_area("Trading Session Notes", placeholder="How do you feel right now?")
+        if st.form_submit_button("SAVE MINDSET"):
+            # Salvataggio come record psicologico
+            supabase.table('trades').insert({
+                "psychology_score": mood,
+                "mood_notes": notes,
+                "asset": "MINDSET_LOG"
+            }).execute()
+            st.success("Mindset recorded!")
+            st.rerun()
 
-with t_growth:
     if not df.empty:
-        df['equity_line'] = st.session_state.balance_init + df['profit'].cumsum()
-        fig_growth = px.line(df, y='equity_line', title='CAPITAL EVOLUTION', 
-                            template="plotly_dark", color_discrete_sequence=['#ffffff'])
-        fig_growth.update_traces(line=dict(width=3))
-        st.plotly_chart(fig_growth, use_container_width=True)
-    else:
-        st.info("Inizia caricando il tuo trade da +142 dalla sidebar laterale.")
-
-with t_journal:
-    st.subheader("Historical Logbook")
-    if not df.empty:
-        # Visualizzazione pulita invertita (ultimo in alto)
-        st.dataframe(df[['created_at', 'asset', 'profit', 'setup_type', 'psychology', 'notes']].iloc[::-1], use_container_width=True)
-    else:
-        st.write("No records found in database.")
-
-with t_data:
-    if not df.empty:
-        ca1, ca2 = st.columns(2)
-        with ca1:
-            st.subheader("Profit by Asset")
-            fig_asset = px.bar(df.groupby('asset')['profit'].sum().reset_index(), x='asset', y='profit', template="plotly_dark")
-            st.plotly_chart(fig_asset, use_container_width=True)
-        with ca2:
-            st.subheader("Psychology Impact")
-            fig_psy = px.box(df, x='psychology', y='profit', template="plotly_dark")
-            st.plotly_chart(fig_psy, use_container_width=True)
-    else:
-        st.info("Awaiting more data for deep analysis.")
-
-with t_settings:
-    st.subheader("Vault Configuration")
-    st.session_state.balance_init = st.number_input("Starting Capital (€)", value=st.session_state.balance_init)
-    st.markdown(f"**Database Status:** Connected to `{URL.split('//')[1]}`")
-    if st.button("Refresh Connection"):
-        st.rerun()
+        st.divider()
+        st.subheader("PSYCHOLOGY HISTORY")
+        psy_df = df.dropna(subset=['psychology_score'])
+        st.table(psy_df[['created_at', 'psychology_score', 'mood_notes']].iloc[::-1].head(10))
 
 # ==========================================
-# 8. FOOTER
+# MODULE 4: DAILY RECAP
 # ==========================================
-st.markdown("---")
-st.caption("TradeCore Architecture | v1.7 | Developed for Elite Performance")
+elif menu == "DAILY RECAP":
+    st.header("📅 END OF DAY REVIEW")
+    with st.form("daily_form", clear_on_submit=True):
+        d_score = st.slider("Daily Performance Score (1-10)", 1, 10, 5)
+        d_summary = st.text_area("What did you learn today?")
+        if st.form_submit_button("FINISH DAY"):
+            supabase.table('trades').insert({
+                "daily_score": d_score,
+                "daily_summary": d_summary,
+                "asset": "DAILY_RECAP"
+            }).execute()
+            st.success("Daily Recap Logged!")
+            st.rerun()
+
+    if not df.empty:
+        st.divider()
+        st.subheader("RECENT RECAPS")
+        recap_df = df.dropna(subset=['daily_score'])
+        st.table(recap_df[['created_at', 'daily_score', 'daily_summary']].iloc[::-1].head(5))
+
+# ==========================================
+# MODULE 5: SETTINGS
+# ==========================================
+elif menu == "SETTINGS":
+    st.header("⚙️ SYSTEM CONFIG")
+    st.session_state.start_cap = st.number_input("Initial Capital", value=st.session_state.start_cap)
+    if st.button("RESET SESSION"): st.rerun()
