@@ -1,129 +1,104 @@
 import streamlit as st
 from supabase import create_client, Client
-import datetime
+import pandas as pd
+import plotly.express as px
+from datetime import datetime
 
-# 1. DATABASE CONNECTION
+# --- CONFIGURAZIONE SUPABASE ---
 URL: str = "https://aurjuibhbuinxzirpjkt.supabase.co"
 KEY: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cmp1aWJoYnVpbnh6aXJwamt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODE0MjEsImV4cCI6MjA5MTA1NzQyMX0.xSZBDGACcF6yDpkvuKQZottdKINFM0JM3iuRrI987lE"
 supabase: Client = create_client(URL, KEY)
 
-# 2. PAGE CONFIG & DARK THEME
-st.set_page_config(page_title="TradeCore | Professional Edge", page_icon="🔲", layout="wide")
+# --- CONFIGURAZIONE PAGINA ---
+st.set_page_config(page_title="TradeCore | Professional Dashboard", layout="wide")
 
+# CSS per il look Bianco e Nero (Dark Mode)
 st.markdown("""
     <style>
-    .main { background-color: #000000; color: #ffffff; }
-    .stButton>button { background-color: #ffffff; color: #000000; border-radius: 5px; width: 100%; font-weight: bold; border: none; }
-    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stTextArea>div>textarea { background-color: #111111; color: white; border: 1px solid #333333; }
-    .stSelectbox>div>div>div { background-color: #111111; color: white; }
-    h1, h2, h3 { color: #ffffff !important; font-family: 'Inter', sans-serif; }
-    .stMetric { background-color: #111111; padding: 15px; border-radius: 10px; border: 1px solid #222222; }
+    .main { background-color: #0e1117; color: white; }
+    div.stButton > button { background-color: white; color: black; border-radius: 5px; font-weight: bold; width: 100%; }
+    .stMetric { background-color: #1a1c23; padding: 15px; border-radius: 10px; border: 1px solid #333; }
     </style>
-    """, unsafe_allow_safe_area=True)
+    """, unsafe_allow_html=True)
+
+# --- FUNZIONI DATABASE ---
+def fetch_trades():
+    response = supabase.table('trades').select("*").order('created_at').execute()
+    return pd.DataFrame(response.data)
+
+def save_trade(asset, profit, pips, contracts, psychology, notes):
+    supabase.table('trades').insert({
+        "asset": asset, "profit": profit, "pips": pips, 
+        "contracts": contracts, "psychology": psychology, "notes": notes
+    }).execute()
+    st.rerun()
 
 # --- HEADER ---
-col_l, col_r = st.columns([1, 5])
-with col_l:
-    st.write("# 🔲")
-with col_r:
+col_logo, col_title = st.columns([1, 4])
+with col_title:
     st.title("TRADECORE")
-    st.write(f"Today is: **{datetime.date.today().strftime('%A, %d %B %Y')}** | *Rule your edge. Master your risk.*")
+    st.caption("Professional Equity & Psychology Tracker")
+
+# --- CARICAMENTO DATI ---
+df = fetch_trades()
+initial_balance = 5000.0  # Puoi renderlo variabile nelle impostazioni
+
+# --- CALCOLI DASHBOARD ---
+if not df.empty:
+    total_profit = df['profit'].sum()
+    current_balance = initial_balance + total_profit
+    win_rate = (len(df[df['profit'] > 0]) / len(df)) * 100
+    total_trades = len(df)
+else:
+    total_profit, current_balance, win_rate, total_trades = 0, initial_balance, 0, 0
+
+# --- METRICHE PRINCIPALI ---
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Current Balance", f"€{current_balance:,.2f}")
+m2.metric("Total P/L", f"€{total_profit:,.2f}", delta=f"{total_profit:,.2f}")
+m3.metric("Win Rate", f"{win_rate:.1f}%")
+m4.metric("Trades Executed", total_trades)
 
 st.divider()
 
-# --- SIDEBAR: CALCULATOR ---
+# --- SIDEBAR: REGISTRAZIONE OPERAZIONE ---
 with st.sidebar:
-    st.header("🧮 Risk Calculator")
-    balance = st.number_input("Account Balance ($)", value=50000.0, step=1000.0)
-    risk_pct = st.slider("Risk per Trade (%)", 0.1, 5.0, 1.0)
-    stop_loss = st.number_input("Stop Loss (Points/Pips)", value=10.0, step=1.0)
+    st.header("⚡ New Execution")
+    asset = st.selectbox("Asset", ["NAS100", "EURUSD", "GOLD", "BTCUSD"])
+    prof = st.number_input("Profit/Loss (€)", value=0.0)
+    pips = st.number_input("Points / Pips", value=0.0)
+    lots = st.number_input("Contracts / Lots", value=0.1)
     
-    risk_dollars = balance * (risk_pct / 100)
-    # Calcolo lotti semplificato (es. Nasdaq 1$ per punto per lotto)
-    suggested_lots = risk_dollars / (stop_loss if stop_loss > 0 else 1)
+    st.subheader("🧠 Psychology")
+    psy = st.select_slider("Mindset State", options=["Tough", "Mixed", "Focused", "God Mode"])
+    note = st.text_area("Trade Review", placeholder="Entrata su IFVG...")
     
-    st.metric("Risk Amount", f"${risk_dollars:.2f}")
-    st.metric("Suggested Lots", f"{suggested_lots:.2f}")
-    st.info("Ensure lot size matches your broker's contract specification.")
+    if st.button("SAVE TO CLOUD"):
+        save_trade(asset, prof, pips, lots, psy, note)
 
-# --- MAIN INTERFACE: 3 COLUMNS ---
-tab1, tab2 = st.tabs(["📈 Trade Logger", "📊 Performance Review"])
+# --- GRAFICI E STORICO ---
+tab1, tab2, tab3 = st.tabs(["📈 Equity Curve", "📜 Journal", "⚙️ Settings"])
 
 with tab1:
-    col_input, col_psycho = st.columns([1, 1], gap="large")
-
-    with col_input:
-        st.subheader("Step 1: Execution Details")
-        with st.form("trade_form", clear_on_submit=True):
-            asset = st.selectbox("Asset Class", ["NAS100 (Nasdaq)", "EURUSD", "GOLD (XAUUSD)", "S&P 500", "BTCUSD"])
-            p_l = st.number_input("Realized P/L ($)", value=0.0, step=10.0)
-            setup = st.text_input("Setup Name (e.g., IFVG, Silver Bullet, Liquidity Sweep)")
-            
-            st.write("---")
-            st.subheader("Step 2: Mental State")
-            mood = st.select_slider("Daily Mental Weather", 
-                                   options=["Stormy ⛈️", "Cloudy ☁️", "Neutral 😐", "Clear Sky 🌤️", "Peak Performance ⚡"])
-            
-            # THE PSYCHO QUESTIONS (The core of our work)
-            st.write("**Self-Reflection Questions:**")
-            q1 = st.checkbox("Did I follow my Trading Plan 100%?")
-            q2 = st.checkbox("Did I wait for my actual setup (no FOMO)?")
-            q3 = st.checkbox("Am I revenge trading or over-leveraging?")
-            
-            error_type = st.selectbox("If you failed, why?", 
-                                     ["N/A", "FOMO", "Early Exit", "Late Entry", "Over-leverage", "Lack of Patience"])
-            
-            notes = st.text_area("Final Thoughts / Trade Review")
-            
-            submit = st.form_submit_button("LOCK TRADE INTO CLOUD")
-
-    with col_psycho:
-        st.subheader("🧠 TradeCore Insights")
-        if p_l > 0:
-            st.success(f"Great job! You secured **${p_l}**. Keep the discipline.")
-        elif p_l < 0:
-            st.error(f"Loss of **${abs(p_l)}**. Remember: A stop loss is just a business expense.")
-        
-        st.write("---")
-        st.write("### Your Psychology Summary Today")
-        st.write(f"**Current Mood:** {mood}")
-        status = "Disciplined ✅" if q1 and q2 else "Plan Violated ⚠️"
-        st.write(f"**Execution Status:** {status}")
-        
-        if error_type != "N/A":
-            st.warning(f"**Focus Area:** You identified '{error_type}' as a weakness today. Fix it for the next session.")
-
-# --- DATABASE LOGIC ---
-if submit:
-    # Aggreghiamo i dati psicologici per il database
-    psycho_summary = f"Mood: {mood} | Plan: {q1} | Patience: {q2} | Error: {error_type}"
-    
-    trade_data = {
-        "asset": asset,
-        "profit": p_l,
-        "notes": f"[{setup}] {notes} || {psycho_summary}"
-    }
-    
-    try:
-        supabase.table("trades").insert(trade_data).execute()
-        st.toast("Data synced with Supabase successfully!", icon='✅')
-        if p_l > 0:
-            st.balloons()
-    except Exception as e:
-        st.error(f"Sync Error: {e}")
+    if not df.empty:
+        df['equity'] = initial_balance + df['profit'].cumsum()
+        fig = px.line(df, x=df.index, y='equity', title='Performance Growth',
+                     color_discrete_sequence=['white'], template="plotly_dark")
+        fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No data available. Record your first trade to see the curve.")
 
 with tab2:
-    st.subheader("History & Equity Curve (Live Data)")
-    try:
-        response = supabase.table("trades").select("*").order("id", desc=True).execute()
-        data = response.data
-        
-        if data:
-            for t in data:
-                with st.expander(f"{t['asset']} | P/L: ${t['profit']} | {t['id']} "):
-                    st.write(f"**Details:** {t['notes']}")
-                    # Qui potremmo aggiungere un tasto per eliminare il trade se sbagliato
-        else:
-            st.info("The database is empty. Log your first trade above!")
-    except:
-        st.warning("Connecting to cloud... please wait.")
+    if not df.empty:
+        # Formattazione tabella per renderla figa
+        st.dataframe(df[['created_at', 'asset', 'profit', 'pips', 'contracts', 'psychology', 'notes']].sort_values(by='created_at', ascending=False), 
+                     use_container_width=True)
+    else:
+        st.write("Your journal is empty.")
+
+with tab3:
+    st.subheader("Account Settings")
+    new_balance = st.number_input("Starting Capital", value=initial_balance)
+    st.button("Update Account Settings (Coming Soon)")
+       
