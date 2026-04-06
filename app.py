@@ -5,7 +5,7 @@ import plotly.express as px
 from datetime import datetime
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="TradeCore | Elite Vault", layout="wide")
+st.set_page_config(page_title="TradeCore | Professional Vault", layout="wide")
 
 # CSS for Dark Mode and Sidebar Navigation
 st.markdown("""
@@ -36,16 +36,14 @@ if 'start_cap' not in st.session_state: st.session_state.start_cap = 5000.0
 # 4. SIDEBAR NAVIGATION
 with st.sidebar:
     st.title("TRADECORE")
-    st.caption("Elite Trading OS v3.1")
+    st.caption("Elite Trading OS v3.2")
     st.divider()
     
-    # Navigation Menu
     menu = st.radio("SELECT MODULE", 
                     ["DASHBOARD", "LOG TRADE", "PSYCHOLOGY", "DAILY RECAP", "SETTINGS"])
     
     st.divider()
     if not df.empty:
-        # Filter out rows that are only psychology or daily recaps (no profit)
         trade_df = df.dropna(subset=['net_profit'])
         net_pl = trade_df['net_profit'].sum()
         st.metric("TOTAL NET P/L", f"€{net_pl:,.2f}", delta=f"{net_pl:,.2f}")
@@ -56,7 +54,6 @@ with st.sidebar:
 # ==========================================
 if menu == "DASHBOARD":
     st.header("📈 PERFORMANCE ANALYTICS")
-    
     trade_df = df.dropna(subset=['net_profit']) if not df.empty else pd.DataFrame()
 
     if not trade_df.empty:
@@ -65,7 +62,6 @@ if menu == "DASHBOARD":
         m2.metric("WIN RATE", f"{(len(trade_df[trade_df['net_profit'] > 0]) / len(trade_df)) * 100:.1f}%")
         m3.metric("AVG TRADE", f"€{trade_df['net_profit'].mean():,.2f}")
         
-        # Profit Factor Calculation
         pos = trade_df[trade_df['net_profit'] > 0]['net_profit'].sum()
         neg = abs(trade_df[trade_df['net_profit'] < 0]['net_profit'].sum())
         pf = round(pos / neg, 2) if neg != 0 else "MAX"
@@ -86,12 +82,23 @@ if menu == "DASHBOARD":
 # ==========================================
 elif menu == "LOG TRADE":
     st.header("⚡ EXECUTION TERMINAL")
+    
+    # Lista Asset Espansa
+    asset_list = [
+        "NAS100", "US30", "SPX500", "GER40", "UK100", "JP225", # Indices
+        "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "EURGBP", # Forex Major
+        "GOLD", "SILVER", "OIL_WTI", "NAT_GAS", # Commodities
+        "BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD" # Crypto
+    ]
+
     with st.form("trade_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            asset = st.selectbox("Instrument", ["NAS100", "US30", "GOLD", "EURUSD", "BTCUSD"])
+            asset = st.selectbox("Instrument", asset_list)
             side = st.selectbox("Side", ["LONG", "SHORT"])
-            lots = st.number_input("Lots", value=0.10, step=0.01)
+            # Aggiunta scelta tra Lots e Contracts
+            size_type = st.radio("Size Type", ["Lots", "Contracts"], horizontal=True)
+            size_val = st.number_input(f"Enter {size_type}", value=0.10, step=0.01)
         with c2:
             entry = st.number_input("Entry Price", format="%.5f")
             exit_p = st.number_input("Exit Price", format="%.5f")
@@ -105,15 +112,17 @@ elif menu == "LOG TRADE":
         if st.form_submit_button("SUBMIT TRADE"):
             data = {
                 "asset": asset, "side": side, "entry_price": entry, "exit_price": exit_p,
-                "lots": lots, "gross_profit": gross, "commissions": comm,
+                "lots": size_val if size_type == "Lots" else None,
+                "contracts": size_val if size_type == "Contracts" else None,
+                "gross_profit": gross, "commissions": comm,
                 "net_profit": gross - comm, "setup_type": setup
             }
             supabase.table('trades').insert(data).execute()
-            st.success("Trade Secured!")
+            st.success(f"Trade on {asset} Secured!")
             st.rerun()
 
 # ==========================================
-# MODULE 3: PSYCHOLOGY
+# MODULE 3: PSYCHOLOGY (Mantenedo tutto)
 # ==========================================
 elif menu == "PSYCHOLOGY":
     st.header("🧠 MINDSET TRACKER")
@@ -121,7 +130,6 @@ elif menu == "PSYCHOLOGY":
         mood = st.select_slider("Current State", options=["REVENGE", "TOUGH", "CALM", "FOCUSED", "GOD MODE"])
         notes = st.text_area("Trading Session Notes", placeholder="How do you feel right now?")
         if st.form_submit_button("SAVE MINDSET"):
-            # Salvataggio come record psicologico
             supabase.table('trades').insert({
                 "psychology_score": mood,
                 "mood_notes": notes,
@@ -137,7 +145,7 @@ elif menu == "PSYCHOLOGY":
         st.table(psy_df[['created_at', 'psychology_score', 'mood_notes']].iloc[::-1].head(10))
 
 # ==========================================
-# MODULE 4: DAILY RECAP
+# MODULE 4: DAILY RECAP (Mantenedo tutto)
 # ==========================================
 elif menu == "DAILY RECAP":
     st.header("📅 END OF DAY REVIEW")
@@ -160,7 +168,7 @@ elif menu == "DAILY RECAP":
         st.table(recap_df[['created_at', 'daily_score', 'daily_summary']].iloc[::-1].head(5))
 
 # ==========================================
-# MODULE 5: SETTINGS
+# MODULE 5: SETTINGS (Mantenedo tutto)
 # ==========================================
 elif menu == "SETTINGS":
     st.header("⚙️ SYSTEM CONFIG")
