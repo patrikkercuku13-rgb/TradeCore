@@ -1,181 +1,129 @@
 import streamlit as st
-import pandas as pd
-import yfinance as yf
-from datetime import datetime
+from supabase import create_client, Client
+import datetime
 
-# PROFESSIONAL CONFIG
-st.set_page_config(page_title="Alpha Trader Hub", layout="wide")
+# 1. DATABASE CONNECTION
+URL: str = "https://aurjuibhbuinxzirpjkt.supabase.co"
+KEY: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cmp1aWJoYnVpbnh6aXJwamt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODE0MjEsImV4cCI6MjA5MTA1NzQyMX0.xSZBDGACcF6yDpkvuKQZottdKINFM0JM3iuRrI987lE"
+supabase: Client = create_client(URL, KEY)
 
-# SESSION STATE INITIALIZATION
-if 'trades' not in st.session_state: st.session_state.trades = []
-if 'daily_recaps' not in st.session_state: st.session_state.daily_recaps = []
-if 'account_setup' not in st.session_state: 
-    st.session_state.account_setup = {"balance": 25000.0, "target": 1500.0, "max_drawdown": 1250.0, "type": "Prop Firm"}
+# 2. PAGE CONFIG & DARK THEME
+st.set_page_config(page_title="TradeCore | Professional Edge", page_icon="🔲", layout="wide")
 
-def get_live_price(ticker):
+st.markdown("""
+    <style>
+    .main { background-color: #000000; color: #ffffff; }
+    .stButton>button { background-color: #ffffff; color: #000000; border-radius: 5px; width: 100%; font-weight: bold; border: none; }
+    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stTextArea>div>textarea { background-color: #111111; color: white; border: 1px solid #333333; }
+    .stSelectbox>div>div>div { background-color: #111111; color: white; }
+    h1, h2, h3 { color: #ffffff !important; font-family: 'Inter', sans-serif; }
+    .stMetric { background-color: #111111; padding: 15px; border-radius: 10px; border: 1px solid #222222; }
+    </style>
+    """, unsafe_allow_safe_area=True)
+
+# --- HEADER ---
+col_l, col_r = st.columns([1, 5])
+with col_l:
+    st.write("# 🔲")
+with col_r:
+    st.title("TRADECORE")
+    st.write(f"Today is: **{datetime.date.today().strftime('%A, %d %B %Y')}** | *Rule your edge. Master your risk.*")
+
+st.divider()
+
+# --- SIDEBAR: CALCULATOR ---
+with st.sidebar:
+    st.header("🧮 Risk Calculator")
+    balance = st.number_input("Account Balance ($)", value=50000.0, step=1000.0)
+    risk_pct = st.slider("Risk per Trade (%)", 0.1, 5.0, 1.0)
+    stop_loss = st.number_input("Stop Loss (Points/Pips)", value=10.0, step=1.0)
+    
+    risk_dollars = balance * (risk_pct / 100)
+    # Calcolo lotti semplificato (es. Nasdaq 1$ per punto per lotto)
+    suggested_lots = risk_dollars / (stop_loss if stop_loss > 0 else 1)
+    
+    st.metric("Risk Amount", f"${risk_dollars:.2f}")
+    st.metric("Suggested Lots", f"{suggested_lots:.2f}")
+    st.info("Ensure lot size matches your broker's contract specification.")
+
+# --- MAIN INTERFACE: 3 COLUMNS ---
+tab1, tab2 = st.tabs(["📈 Trade Logger", "📊 Performance Review"])
+
+with tab1:
+    col_input, col_psycho = st.columns([1, 1], gap="large")
+
+    with col_input:
+        st.subheader("Step 1: Execution Details")
+        with st.form("trade_form", clear_on_submit=True):
+            asset = st.selectbox("Asset Class", ["NAS100 (Nasdaq)", "EURUSD", "GOLD (XAUUSD)", "S&P 500", "BTCUSD"])
+            p_l = st.number_input("Realized P/L ($)", value=0.0, step=10.0)
+            setup = st.text_input("Setup Name (e.g., IFVG, Silver Bullet, Liquidity Sweep)")
+            
+            st.write("---")
+            st.subheader("Step 2: Mental State")
+            mood = st.select_slider("Daily Mental Weather", 
+                                   options=["Stormy ⛈️", "Cloudy ☁️", "Neutral 😐", "Clear Sky 🌤️", "Peak Performance ⚡"])
+            
+            # THE PSYCHO QUESTIONS (The core of our work)
+            st.write("**Self-Reflection Questions:**")
+            q1 = st.checkbox("Did I follow my Trading Plan 100%?")
+            q2 = st.checkbox("Did I wait for my actual setup (no FOMO)?")
+            q3 = st.checkbox("Am I revenge trading or over-leveraging?")
+            
+            error_type = st.selectbox("If you failed, why?", 
+                                     ["N/A", "FOMO", "Early Exit", "Late Entry", "Over-leverage", "Lack of Patience"])
+            
+            notes = st.text_area("Final Thoughts / Trade Review")
+            
+            submit = st.form_submit_button("LOCK TRADE INTO CLOUD")
+
+    with col_psycho:
+        st.subheader("🧠 TradeCore Insights")
+        if p_l > 0:
+            st.success(f"Great job! You secured **${p_l}**. Keep the discipline.")
+        elif p_l < 0:
+            st.error(f"Loss of **${abs(p_l)}**. Remember: A stop loss is just a business expense.")
+        
+        st.write("---")
+        st.write("### Your Psychology Summary Today")
+        st.write(f"**Current Mood:** {mood}")
+        status = "Disciplined ✅" if q1 and q2 else "Plan Violated ⚠️"
+        st.write(f"**Execution Status:** {status}")
+        
+        if error_type != "N/A":
+            st.warning(f"**Focus Area:** You identified '{error_type}' as a weakness today. Fix it for the next session.")
+
+# --- DATABASE LOGIC ---
+if submit:
+    # Aggreghiamo i dati psicologici per il database
+    psycho_summary = f"Mood: {mood} | Plan: {q1} | Patience: {q2} | Error: {error_type}"
+    
+    trade_data = {
+        "asset": asset,
+        "profit": p_l,
+        "notes": f"[{setup}] {notes} || {psycho_summary}"
+    }
+    
     try:
-        # Use a localized method for reliability
-        data = yf.Ticker(ticker)
-        # Fetching only the latest close price efficiently
-        price = data.history(period="1d")['Close'].iloc[-1]
-        return round(price, 5)
-    except: return 0.0
+        supabase.table("trades").insert(trade_data).execute()
+        st.toast("Data synced with Supabase successfully!", icon='✅')
+        if p_l > 0:
+            st.balloons()
+    except Exception as e:
+        st.error(f"Sync Error: {e}")
 
-# --- SIDEBAR: ACCOUNT SETUP ---
-st.sidebar.title("💳 Account Settings")
-acc_type = st.sidebar.selectbox("Account Type", ["Prop Firm", "Live", "Demo"], index=0)
-
-with st.sidebar.expander("Configure Account", expanded=True):
-    balance = st.number_input("Initial Balance ($)", value=st.session_state.account_setup["balance"], step=100.0)
-    
-    # Only show Target and DD for Prop Firms
-    if acc_type == "Prop Firm":
-        target_prof = st.number_input("Profit Target ($)", value=1500.0, step=10.0)
-        max_dd = st.number_input("Max Drawdown ($)", value=1250.0, step=10.0)
-    else:
-        target_prof = 0.0
-        max_dd = 0.0
+with tab2:
+    st.subheader("History & Equity Curve (Live Data)")
+    try:
+        response = supabase.table("trades").select("*").order("id", desc=True).execute()
+        data = response.data
         
-    if st.sidebar.button("Update Account"):
-        # Resetting trades if balance changes to keep the graph accurate (optional)
-        # st.session_state.trades = []
-        st.session_state.account_setup = {
-            "balance": balance, "target": target_prof, "max_drawdown": max_dd, "type": acc_type
-        }
-        st.success("Account Updated!")
-
-st.sidebar.divider()
-page = st.sidebar.radio("Navigation", ["🏠 Dashboard", "📝 Trade Log", "🧠 Psychology"])
-
-# --- 1. DASHBOARD PAGE ---
-if page == "🏠 Dashboard":
-    st.title(f"📊 {st.session_state.account_setup['type']} Analytics")
-    
-    setup = st.session_state.account_setup
-    initial_balance = setup['balance']
-    df = pd.DataFrame(st.session_state.trades)
-    
-    current_pnl = df["Net_PnL"].sum() if not df.empty else 0.0
-    current_balance = initial_balance + current_pnl
-    
-    # Top Metrics
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Current Balance", f"$ {current_balance:.2f}", f"${current_pnl:.2f} (Total PnL)")
-    
-    if setup['type'] == "Prop Firm":
-        # Prop Firm Specific Metrics
-        miss_target = setup['target'] - current_pnl
-        perc_t = (current_pnl / setup['target']) * 100 if current_pnl > 0 else 0
-        c2.metric("Target Remaining", f"$ {max(0, miss_target):.2f}", f"{min(100, perc_t):.1f}% Done")
-        
-        # Drawdown calculation based on initial balance floor
-        drawdown_floor = initial_balance - setup['max_drawdown']
-        margine_dd = current_balance - drawdown_floor
-        
-        c3.metric("Drawdown Margin Left", f"$ {max(0, margine_dd):.2f}", f"Floor: ${drawdown_floor:.2f}", delta_color="inverse")
-    else:
-        # Live/Demo Metrics
-        winrate = (len(df[df['Net_PnL'] > 0]) / len(df)) * 100 if not df.empty else 0
-        c2.metric("Winrate", f"{winrate:.1f}%")
-        c3.metric("Total Trades", len(df))
-
-    # --- EQUITY CURVE (ANCHORED TO BALANCE) ---
-    st.subheader("📈 Absolute Equity Curve (Actual Balance)")
-    
-    if not df.empty:
-        # 1. Create a Series of Net PnL
-        pnl_series = df["Net_PnL"]
-        # 2. Calculate the Cumulative PnL
-        cumulative_pnl = pnl_series.cumsum()
-        # 3. Add the Initial Balance to every cumulative point
-        actual_equity = initial_balance + cumulative_pnl
-        
-        # 4. Create the final plot data, starting exactly at Initial Balance
-        plot_data = pd.concat([pd.Series([initial_balance]), actual_equity], ignore_index=True)
-        
-        # Plotting the Line Chart
-        st.line_chart(plot_data)
-        
-        # 5. Display detailed trades for verification
-        st.subheader("Logged Trades")
-        st.dataframe(df[["Asset", "Dir", "Size", "Net_PnL", "Timestamp"]].iloc[::-1], use_container_width=True)
-        
-    else:
-        # Default state with no trades
-        st.info("No trades logged yet. Below is your starting capital.")
-        # Make a simple graph showing just the starting balance over a 'placeholder' time
-        st.line_chart([initial_balance, initial_balance])
-
-# --- 2. TRADE LOG PAGE ---
-elif page == "📝 Trade Log":
-    st.title("📓 Professional Trade Log")
-    
-    with st.form("trade_entry"):
-        col_m1, col_m2, col_m3 = st.columns(3)
-        asset_cat = col_m1.selectbox("Asset Class", ["Futures", "CFD / Forex"])
-        ticker = col_m2.text_input("Ticker (e.g. MNQ=F, EURUSD=X)", "MNQ=F")
-        direction = col_m3.selectbox("Direction", ["Long", "Short"])
-        
-        live_p = get_live_price(ticker)
-        st.write(f"Current Market Price: **{live_p}**")
-        
-        c_in, c_out, c_fee = st.columns(3)
-        p_in = c_in.number_input("Entry Price", value=live_p, format="%.5f")
-        p_out = c_out.number_input("Exit Price", format="%.5f")
-        commissions = c_fee.number_input("Commissions ($)", value=1.0, step=0.1)
-        
-        # DYNAMIC INPUTS BASED ON ASSET CLASS
-        if asset_cat == "Futures":
-            f_type = st.radio("Contract Type", ["Standard (Full)", "Micro"], index=1, horizontal=True) # Default MNQ
-            size = st.number_input("Number of Contracts", value=1, step=1) # Integer for Futures
-            tick_val = 20 if f_type == "Standard (Full)" else 2 # e.g. NQ=20, MNQ=2
+        if data:
+            for t in data:
+                with st.expander(f"{t['asset']} | P/L: ${t['profit']} | {t['id']} "):
+                    st.write(f"**Details:** {t['notes']}")
+                    # Qui potremmo aggiungere un tasto per eliminare il trade se sbagliato
         else:
-            # CFD / Forex Logic
-            size = st.number_input("Lots", value=0.01, step=0.01, format="%.2f") # Float for CFD
-            tick_val = 10 # Standard Pip value for 1 Lot
-            
-        submit_button = st.form_submit_button("Submit Trade")
-        
-        if submit_button:
-            # PnL Calculation
-            price_diff = (p_out - p_in) if direction == "Long" else (p_in - p_out)
-            
-            if asset_cat == "Futures":
-                gross_pnl = price_diff * tick_val * size
-            else:
-                # Forex Pips calculation
-                gross_pnl = (price_diff * 10000) * size * (tick_val / 10)
-            
-            net_pnl = gross_pnl - commissions
-            
-            st.session_state.trades.append({
-                "Asset": ticker, 
-                "Dir": direction, 
-                "Size": size, 
-                "Net_PnL": round(net_pnl, 2),
-                "Type": asset_cat,
-                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            })
-            st.success(f"Trade Logged! Net PnL: ${net_pnl:.2f}")
-
-# --- 3. PSYCHOLOGY PAGE ---
-elif page == "🧠 Psychology":
-    st.title("🧠 Market Mindset")
-    # ... (Keeping the Psychology section same as last version)
-    st.subheader("Mental Recap")
-    m1, m2, m3 = st.columns(3)
-    if m1.button("🔴 TOUGH DAY (⛈️)"): st.session_state.last_mood = "Tough Day"
-    if m2.button("🟡 MIXED (☁️)"): st.session_state.last_mood = "Mixed"
-    if m3.button("🟢 GOOD DAY (☀️)"): st.session_state.last_mood = "Good Day"
-    current_mood = st.session_state.get('last_mood', 'Not Set')
-    st.write(f"Mindset: **{current_mood}**")
-    recap_notes = st.text_area("Write your Daily Recap...", height=150)
-    if st.button("Save Recap"):
-        st.session_state.daily_recaps.append({
-            "Date": pd.Timestamp.now().strftime("%Y-%m-%d"),
-            "Mood": current_mood, 
-            "Notes": recap_notes
-        })
-        st.balloons(); st.success("Saved!")
-    if st.session_state.daily_recaps:
-        st.table(pd.DataFrame(st.session_state.daily_recaps).iloc[::-1])
+            st.info("The database is empty. Log your first trade above!")
+    except:
+        st.warning("Connecting to cloud... please wait.")
