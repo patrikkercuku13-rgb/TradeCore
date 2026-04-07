@@ -4,219 +4,239 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from supabase import create_client, Client
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import calendar
 import time
 
-# --- 1. CONFIGURAZIONE ULTIMATE ---
+# --- 1. CONFIGURAZIONE SISTEMA ---
 st.set_page_config(
-    page_title="TRADECORE V10.0 | PROFESSIONAL TERMINAL",
+    page_title="TRADECORE V11.0 | ULTIMATE TERMINAL",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. ENGINE ESTETICO (CSS COMPLETO) ---
+# --- 2. CREDENZIALI E CONNESSIONE ---
+# Sostituisci qui se non usi i Secrets di Streamlit
+SUPABASE_URL = "https://aurjuibhbuinxzirpjkt.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cmp1aWJoYnVpbnh6aXJwamt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODE0MjEsImV4cCI6MjA5MTA1NzQyMX0.xSZBDGACcF6yDpkvuKQZottdKINFM0JM3iuRrI987lE"
+
+@st.cache_resource
+def init_db():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+try:
+    db = init_db()
+except Exception as e:
+    st.error(f"Connessione fallita: {e}")
+    st.stop()
+
+# --- 3. ENGINE ESTETICO (CSS CUSTOM) ---
 st.markdown("""
     <style>
+    /* Global Styles */
     .main { background-color: #050708; color: #e0e0e0; font-family: 'Inter', sans-serif; }
     div[data-testid="stSidebar"] { background-color: #0a0c10; border-right: 1px solid #1f2328; }
     
-    /* Metriche Dashboard */
+    /* Glossy Metrics */
     .stMetric {
-        background-color: #0d1117;
+        background: linear-gradient(145deg, #0d1117, #161b22);
         border: 1px solid #30363d;
         padding: 25px;
         border-radius: 15px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
     }
 
-    /* Calendario Stile Screenshot */
+    /* Calendario Pro */
     .calendar-day {
-        width: 100%; aspect-ratio: 1/1; border-radius: 12px;
+        width: 100%; aspect-ratio: 1/1; border-radius: 14px;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        font-weight: 700; font-size: 1.1em; transition: 0.2s;
+        font-weight: 700; font-size: 1.2em; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
     }
-    .pnl-positive { background: linear-gradient(145deg, #238636, #2ea043); color: white; border: 1px solid #3fb950; box-shadow: 0 0 15px rgba(46, 160, 67, 0.3); }
-    .pnl-negative { background: linear-gradient(145deg, #da3633, #f85149); color: white; border: 1px solid #ff7b72; box-shadow: 0 0 15px rgba(248, 81, 73, 0.3); }
+    .calendar-day:hover { transform: translateY(-5px); filter: brightness(1.3); }
+    .pnl-positive { background: linear-gradient(135deg, #238636 0%, #2ea043 100%); color: white; border: 1px solid #3fb950; box-shadow: 0 0 20px rgba(46, 160, 67, 0.4); }
+    .pnl-negative { background: linear-gradient(135deg, #da3633 0%, #f85149 100%); color: white; border: 1px solid #ff7b72; box-shadow: 0 0 20px rgba(248, 81, 73, 0.4); }
     .pnl-neutral { background-color: #161b22; color: #8b949e; border: 1px solid #30363d; }
-    .pnl-label { font-size: 0.6em; margin-top: 4px; font-weight: 400; font-family: 'Monaco', monospace; }
+    .pnl-label { font-size: 0.65em; margin-top: 5px; font-weight: 400; font-family: 'JetBrains Mono', monospace; }
 
-    /* Form e Input */
-    .stTextInput>div>div>input, .stNumberInput>div>div>input {
-        background-color: #0d1117 !important; color: white !important; border: 1px solid #30363d !important;
+    /* Custom Buttons */
+    .stButton>button {
+        background: linear-gradient(90deg, #1f6feb 0%, #0d419d 100%);
+        color: white; border: none; border-radius: 10px; padding: 12px; font-weight: bold;
+        transition: 0.4s; width: 100%;
     }
+    .stButton>button:hover { box-shadow: 0 0 25px rgba(31, 111, 235, 0.5); transform: scale(1.02); }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. CONNESSIONE DATABASE ---
-SUPABASE_URL = "IL_TUO_URL"
-SUPABASE_KEY = "LA_TUA_KEY"
-
-@st.cache_resource
-def init_connection():
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
-
-db = init_connection()
-
-# --- 4. ENGINE RECUPERO DATI (CON AUTO-RECOVERY) ---
-def get_trades_from_vault():
+# --- 4. DATA ENGINE ---
+def get_vault_data():
     try:
         res = db.table("trades").select("*").order("exit_date").execute()
         df = pd.DataFrame(res.data)
         if not df.empty:
-            # Pulizia e Conversione
             df['exit_date'] = pd.to_datetime(df['exit_date'])
             df['pnl'] = pd.to_numeric(df['pnl'], errors='coerce').fillna(0)
-            
-            # Recupero Colonne Mancanti (Dati di ieri)
-            required_cols = ['asset', 'direction', 'setup', 'session', 'psychology', 'emotion', 'discipline', 'notes']
-            for col in required_cols:
-                if col not in df.columns:
-                    df[col] = "N/A (Legacy)"
+            # Auto-Recovery per dati mancanti
+            cols = ['asset', 'direction', 'setup', 'session', 'psychology', 'emotion', 'discipline', 'notes']
+            for c in cols:
+                if c not in df.columns: df[c] = "N/A"
             return df
         return pd.DataFrame()
-    except Exception as e:
-        st.error(f"Errore Database: {e}")
+    except:
         return pd.DataFrame()
+
+def save_to_vault(payload):
+    db.table("trades").insert(payload).execute()
 
 # --- 5. LOGICA SIDEBAR ---
 with st.sidebar:
-    st.markdown("## TRADECORE `v10.0`")
+    st.markdown("# TRADECORE `V11`")
     st.divider()
-    page = st.radio("SISTEMA", [
-        "📊 DASHBOARD CORE", 
-        "📅 CALENDARIO P&L", 
-        "📝 LOG ESECUZIONE", 
-        "🧠 ANALISI PSICOLOGICA", 
-        "📈 ANALISI AVANZATA", 
-        "🗄️ DATABASE INTEGRALE",
-        "⚙️ API & SETTINGS"
+    page = st.radio("SISTEMA OPERATIVO", [
+        "DASHBOARD ANALYTICS",
+        "CALENDARIO P&L",
+        "LOG ESECUZIONE",
+        "VAULT PSICOLOGICO",
+        "QUANTI ANALYSIS",
+        "DATABASE STORICO",
+        "API AUTOMATION"
     ])
     st.divider()
-    st.caption("Terminal Status: Operational")
+    st.info(f"Connesso a: {SUPABASE_URL.split('//')[1].split('.')[0]}")
 
-df_main = get_trades_from_vault()
+df_main = get_vault_data()
 
-# --- 6. DASHBOARD CORE ---
-if page == "📊 DASHBOARD CORE":
-    st.title("Market Execution Dashboard")
+# --- 6. PAGINE ---
+
+if page == "DASHBOARD ANALYTICS":
+    st.title("Market Intelligence Terminal")
     if not df_main.empty:
-        # Calcolo Metriche
+        # Calcoli Avanzati
         total_pnl = df_main['pnl'].sum()
         win_rate = (len(df_main[df_main['pnl'] > 0]) / len(df_main)) * 100
-        df_main = df_main.sort_values('exit_date')
-        df_main['equity'] = df_main['pnl'].cumsum()
+        avg_trade = df_main['pnl'].mean()
         
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("TOTAL P&L", f"${total_pnl:,.2f}")
+        c1.metric("NET PROFIT", f"${total_pnl:,.2f}")
         c2.metric("WIN RATE", f"{win_rate:.1f}%")
-        c3.metric("TRADES", len(df_main))
-        c4.metric("MAX DRAWDOWN", f"-${abs(df_main['pnl'].min()):,.2f}")
+        c3.metric("EXPECTANCY", f"${avg_trade:,.2f}")
+        c4.metric("MAX DD", f"-${abs(df_main['pnl'].min()):,.2f}")
 
         # Equity Curve
-        fig_equity = go.Figure()
-        fig_equity.add_trace(go.Scatter(x=df_main['exit_date'], y=df_main['equity'], fill='tozeroy', line=dict(color='#00ff88', width=3)))
-        fig_equity.update_layout(template="plotly_dark", height=400, title="Equity Growth")
-        st.plotly_chart(fig_equity, use_container_width=True)
+        df_main = df_main.sort_values('exit_date')
+        df_main['equity'] = df_main['pnl'].cumsum()
+        fig_eq = go.Figure()
+        fig_eq.add_trace(go.Scatter(x=df_main['exit_date'], y=df_main['equity'], fill='tozeroy', 
+                                    line=dict(color='#00ff88', width=4), name="Equity Line"))
+        fig_eq.update_layout(template="plotly_dark", height=500, margin=dict(l=0,r=0,t=20,b=0))
+        st.plotly_chart(fig_eq, use_container_width=True)
     else:
-        st.info("Database pronto. Inizia a inserire le operazioni per vedere le analisi.")
+        st.warning("Carica la prima operazione per sbloccare la dashboard.")
 
-# --- 7. CALENDARIO P&L (STILE RICHIESTO) ---
-elif page == "📅 CALENDARIO P&L":
-    st.title("PnL Visual Calendar")
+elif page == "CALENDARIO P&L":
+    st.title("Visual Performance Calendar")
     if not df_main.empty:
-        df_main['date_only'] = df_main['exit_date'].dt.date
-        daily_pnl = df_main.groupby('date_only')['pnl'].sum().to_dict()
+        df_main['d_only'] = df_main['exit_date'].dt.date
+        daily = df_main.groupby('d_only')['pnl'].sum().to_dict()
         
         now = datetime.now()
         cal = calendar.monthcalendar(now.year, now.month)
         
-        st.markdown(f"### {calendar.month_name[now.month]} {now.year}")
-        cols_h = st.columns(7)
-        for i, d in enumerate(["LUN", "MAR", "MER", "GIO", "VEN", "SAB", "DOM"]):
-            cols_h[i].markdown(f"<center><small>{d}</small></center>", unsafe_allow_html=True)
+        st.subheader(f"{calendar.month_name[now.month]} {now.year}")
+        h = st.columns(7)
+        for i, d in enumerate(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]):
+            h[i].markdown(f"<center><small style='color:gray'>{d}</small></center>", unsafe_allow_html=True)
 
         for week in cal:
             cols = st.columns(7)
             for i, day in enumerate(week):
                 if day != 0:
-                    curr_d = date(now.year, now.month, day)
-                    val = daily_pnl.get(curr_d, None)
-                    style = "pnl-neutral"
-                    lbl = ""
-                    if val is not None:
-                        style = "pnl-positive" if val > 0 else "pnl-negative"
-                        lbl = f"{val:+.0f}"
-                    cols[i].markdown(f'<div class="calendar-day {style}">{day}<div class="pnl-label">{lbl}</div></div>', unsafe_allow_html=True)
+                    dt_obj = date(now.year, now.month, day)
+                    p = daily.get(dt_obj, None)
+                    cls = "pnl-neutral"
+                    txt = ""
+                    if p is not None:
+                        cls = "pnl-positive" if p > 0 else "pnl-negative"
+                        txt = f"{p:+.0f}"
+                    cols[i].markdown(f'<div class="calendar-day {cls}">{day}<div class="pnl-label">{txt}</div></div>', unsafe_allow_html=True)
         st.write("")
+    else:
+        st.info("Nessun dato per generare il calendario.")
 
-# --- 8. LOG ESECUZIONE (PSICOLOGIA INCLUSA) ---
-elif page == "📝 LOG ESECUZIONE":
-    st.title("New Trade Entry")
-    with st.form("main_entry", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        asset = c1.text_input("Asset", value="MNQ1!")
-        direction = c2.selectbox("Side", ["Long", "Short"])
-        size = c3.number_input("Lots", min_value=0.01)
-        
-        c4, c5, c6 = st.columns(3)
-        entry = c4.number_input("Entry Price", format="%.5f")
-        exit_p = c5.number_input("Exit Price", format="%.5f")
-        pt_val = c6.number_input("Point Value", value=20.0)
+elif page == "LOG ESECUZIONE":
+    st.title("Secure Execution Log")
+    with st.form("trade_form", clear_on_submit=True):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            asset = st.text_input("Asset", "NAS100")
+            side = st.selectbox("Side", ["Long", "Short"])
+            size = st.number_input("Contracts", min_value=0.01)
+        with col2:
+            entry = st.number_input("Entry", format="%.5f")
+            exit_p = st.number_input("Exit", format="%.5f")
+            pt_val = st.number_input("Point Value", value=20.0)
+        with col3:
+            setup = st.selectbox("Setup", ["FVG Inversion", "Liquidity Sweep", "MSS", "Silver Bullet"])
+            session = st.selectbox("Session", ["London", "NY Morning", "NY Afternoon"])
+            exit_date = st.date_input("Date", date.today())
         
         st.divider()
-        st.subheader("Context & Psychology")
-        c7, c8, c9 = st.columns(3)
-        setup = c7.selectbox("Setup", ["FVG", "Liquidity Sweep", "MSS", "Silver Bullet"])
-        session = c8.selectbox("Session", ["London", "NY Morning", "NY Afternoon"])
-        exit_date = c9.date_input("Date", date.today())
+        st.subheader("Psychology & Discipline")
+        p1, p2, p3 = st.columns(3)
+        mind = p1.select_slider("Mindset", ["Poor", "Neutral", "Focused", "Peak"])
+        emo = p2.selectbox("Emotion", ["Calm", "Anxiety", "Fear", "Greed", "Patience"])
+        disc = p3.radio("Discipline", ["Perfect", "Minor Violation", "Major Violation"])
+        notes = st.text_area("Notes / Lessons")
         
-        mindset = st.select_slider("Mindset", options=["Poor", "Neutral", "Focused", "Peak Performance"])
-        emotion = st.selectbox("Primary Emotion", ["Calm", "Anxiety", "Fear", "Greed", "Patience"])
-        discipline = st.radio("Did you follow the plan?", ["Yes", "No - FOMO", "No - Revenge", "No - Early Exit"])
-        notes = st.text_area("Trade Review / Mistakes")
-        
-        if st.form_submit_button("SAVE TRADE"):
-            pnl_val = (exit_p - entry) * size * pt_val if direction == "Long" else (entry - exit_p) * size * pt_val
-            payload = {
-                "asset": asset, "direction": direction, "entry_price": entry, "exit_price": exit_p,
-                "pnl": pnl_val, "setup": setup, "session": session, "exit_date": str(exit_date),
-                "psychology": mindset, "emotion": emotion, "discipline": discipline, "notes": notes
+        if st.form_submit_button("COMMIT TO VAULT"):
+            pnl_calc = (exit_p - entry) * size * pt_val if side == "Long" else (entry - exit_p) * size * pt_val
+            data = {
+                "asset": asset, "direction": side, "entry_price": entry, "exit_price": exit_p,
+                "pnl": pnl_calc, "setup": setup, "session": session, "exit_date": str(exit_date),
+                "psychology": mind, "emotion": emo, "discipline": disc, "notes": notes
             }
-            db.table("trades").insert(payload).execute()
-            st.success("Trade salvato.")
+            save_to_vault(data)
+            st.success("Sincronizzazione completata.")
             time.sleep(1)
             st.rerun()
 
-# --- 9. ANALISI PSICOLOGICA & AVANZATA (DOPPIA PROFONDITA') ---
-elif page == "🧠 ANALISI PSICOLOGICA":
-    st.title("Trading Psychology Insights")
+elif page == "VAULT PSICOLOGICO":
+    st.title("Psychological Intelligence")
     if not df_main.empty:
-        col1, col2 = st.columns(2)
-        fig1 = px.bar(df_main.groupby('emotion')['pnl'].sum().reset_index(), x='emotion', y='pnl', title="PnL vs Emotion", template="plotly_dark")
-        col1.plotly_chart(fig1, use_container_width=True)
-        fig2 = px.box(df_main, x='discipline', y='pnl', title="PnL Distribution vs Discipline", template="plotly_dark")
-        col2.plotly_chart(fig2, use_container_width=True)
+        l1, l2 = st.columns(2)
+        f_emo = px.bar(df_main.groupby('emotion')['pnl'].sum().reset_index(), x='emotion', y='pnl', 
+                       title="PnL per Stato Emotivo", template="plotly_dark", color='pnl')
+        l1.plotly_chart(f_emo, use_container_width=True)
+        
+        f_disc = px.box(df_main, x='discipline', y='pnl', title="Impatto della Disciplina", template="plotly_dark")
+        l2.plotly_chart(f_disc, use_container_width=True)
+        
+        st.subheader("Mental Performance Heatmap")
+        heatmap = df_main.groupby(['psychology', 'emotion'])['pnl'].mean().unstack().fillna(0)
+        st.write(heatmap)
 
-elif page == "📈 ANALISI AVANZATA":
-    st.title("Advanced Quantitative Analysis")
+elif page == "QUANTI ANALYSIS":
+    st.title("Quantitative Strategy Analysis")
     if not df_main.empty:
-        col1, col2 = st.columns(2)
-        fig3 = px.pie(df_main, names='setup', values='pnl', title="PnL by Setup Strategy", template="plotly_dark")
-        col1.plotly_chart(fig3, use_container_width=True)
-        fig4 = px.bar(df_main.groupby('session')['pnl'].sum().reset_index(), x='session', y='pnl', title="PnL by Session", template="plotly_dark")
-        col2.plotly_chart(fig4, use_container_width=True)
+        q1, q2 = st.columns(2)
+        f_setup = px.sunburst(df_main, path=['setup', 'direction'], values='pnl', title="Mappa Strategica PnL")
+        q1.plotly_chart(f_setup, use_container_width=True)
+        
+        f_session = px.bar(df_main.groupby('session')['pnl'].sum().reset_index(), x='session', y='pnl', title="PnL per Sessione Oraria")
+        q2.plotly_chart(f_session, use_container_width=True)
 
-# --- 10. DATABASE INTEGRALE ---
-elif page == "🗄️ DATABASE INTEGRALE":
-    st.title("Full Archive Vault")
+elif page == "DATABASE STORICO":
+    st.title("Archive Records")
     st.dataframe(df_main.sort_values('exit_date', ascending=False), use_container_width=True)
-    id_del = st.number_input("Delete ID", step=1)
+    id_del = st.number_input("Elimina ID", step=1)
     if st.button("DELETE PERMANENTLY"):
         db.table("trades").delete().eq("id", id_del).execute()
         st.rerun()
 
-# --- 11. API & SETTINGS ---
-elif page == "⚙️ API & SETTINGS":
-    st.title("Automation & Connection")
-    st.info("Integrazione API MetaTrader/TradingView prevista per il Giorno 5.")
+elif page == "API AUTOMATION":
+    st.title("External Integration")
+    st.info("Modulo per il collegamento diretto a TradingView via Webhook.")
+    st.code(f"WEBHOOK_URL: https://api.tradecore.io/v11/{SUPABASE_URL.split('//')[1].split('.')[0]}")
+    st.text_input("Broker API Key (Encrypted)", type="password")
+    st.button("Test Connection")
