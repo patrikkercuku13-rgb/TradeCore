@@ -105,60 +105,43 @@ df_main = load_data_vault()
 # ==========================================
 # 4. PAGINA: LOG ESECUZIONE (SETUP IERI)
 # ==========================================
-if page == "📝 LOG ESECUZIONE":
-    st.title("Execution Entry Terminal")
-    st.markdown("Registra l'operazione con precisione millimetrica.")
+
+if st.form_submit_button("COMMIT TO VAULT"):
+    # Calcoliamo la differenza di punti assoluta
+    # Esempio: 18000 - 17930 = 70 punti
+    point_diff = (exit_p - entry) if direction == "Long" else (entry - exit_p)
     
-    with st.form("trade_form_v15", clear_on_submit=True):
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            asset = st.selectbox("Asset", ["MNQ", "MES", "MYM", "M2K", "BTCUSD", "GOLD", "EURUSD"])
-            direction = st.radio("Side", ["Long", "Short"], horizontal=True)
-        with col2:
-            entry = st.number_input("Entry Price", format="%.5f")
-            exit_p = st.number_input("Exit Price", format="%.5f")
-        with col3:
-            contracts = st.number_input("Contracts", value=1.0, step=0.1)
-            multiplier = st.number_input("Multiplier ($)", value=2.0)
-        with col4:
-            dt = st.date_input("Exit Date", date.today())
-            session = st.selectbox("Session", ["Asia", "London Open", "NY Morning", "NY Lunch", "NY Afternoon"])
-
-        st.divider()
-        st.subheader("Technical & Context")
-        s1, s2, s3 = st.columns(3)
-        with s1:
-            setup = st.selectbox("Primary Setup", [
-                "FVG Inversion", "Liquidity Sweep", "MSS / Shift", 
-                "Silver Bullet", "Unicorn", "Turtle Soup", "Order Block", "Breaker"
-            ])
-        with s2:
-            tf = st.selectbox("Timeframe", ["1s", "15s", "1m", "5m", "15m", "1h", "4h", "D"])
-        with s3:
-            rr = st.number_input("Planned R:R", value=2.0)
-
-        st.divider()
-        st.subheader("Psychology")
-        p1, p2, p3 = st.columns(3)
-        with p1: psy = st.select_slider("Mindset", ["Tired", "Anxious", "Neutral", "Focused", "Flow"])
-        with p2: emo = st.selectbox("Emotion", ["Calm", "FOMO", "Greed", "Patience", "Fear", "Revenge"])
-        with p3: disc = st.radio("Discipline", ["Perfect", "Minor Violation", "Major Violation"], horizontal=True)
-        
-        notes = st.text_area("Trade Journal / Mistakes")
-
-        if st.form_submit_button("COMMIT TO VAULT"):
-            pnl_val = (exit_p - entry) * contracts * multiplier if direction == "Long" else (entry - exit_p) * contracts * multiplier
-            payload = {
-                "asset": asset, "direction": direction, "entry_price": entry, "exit_price": exit_p,
-                "pnl": pnl_val, "setup": setup, "session": session, "exit_date": str(dt),
-                "psychology": psy, "emotion": emo, "discipline": disc, "notes": notes,
-                "timeframe": tf, "contracts": contracts
-            }
-            db.table("trades").insert(payload).execute()
-            st.success(f"TRADE REGISTRATO: ${pnl_val:,.2f}")
-            time.sleep(1)
-            st.rerun()
-
+    # Calcolo Finale: Punti * Contratti * Valore per Punto
+    # Assicurati che 'multiplier' sia 2 per MNQ o 5 per MES (non 0.02!)
+    pnl_val = float(point_diff * contracts * multiplier)
+    
+    # Arrotondamento per evitare errori di virgola (es. 0.1400000001)
+    pnl_val = round(pnl_val, 2)
+    
+    payload = {
+        "asset": asset, 
+        "direction": direction, 
+        "entry_price": float(entry), 
+        "exit_price": float(exit_p),
+        "pnl": pnl_val, # Ora salva il valore corretto (es. -140.00)
+        "setup": setup, 
+        "session": session, 
+        "exit_date": str(dt),
+        "psychology": psy, 
+        "emotion": emo, 
+        "discipline": disc, 
+        "notes": notes,
+        "timeframe": tf, 
+        "contracts": float(contracts)
+    }
+    
+    try:
+        db.table("trades").insert(payload).execute()
+        st.success(f"✅ TRADE REGISTRATO: {pnl_val:,.2f} USD")
+        time.sleep(1)
+        st.rerun()
+    except Exception as e:
+        st.error(f"Errore: {e}")
 # ==========================================
 # 5. PAGINA: DASHBOARD ANALYTICS
 # ==========================================
