@@ -11,48 +11,57 @@ import time
 # ==========================================
 # 1. CORE ENGINE & UI DESIGN
 # ==========================================
-st.set_page_config(
-    page_title="TRADECORE V15.0 | PROFESSIONAL TERMINAL",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# CSS Custom per look High-End
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono&display=swap');
+# ==========================================
+# 4. PAGINA: LOG ESECUZIONE (CONTROLLA GLI SPAZI!)
+# ==========================================
+if page == "📝 LOG ESECUZIONE":
+    st.title("Execution Entry Terminal")
     
-    .main { background-color: #050708; color: #e0e0e0; font-family: 'Inter', sans-serif; }
-    div[data-testid="stSidebar"] { background-color: #0a0c10; border-right: 1px solid #1f2328; }
-    
-    /* Glossy Metrics */
-    .stMetric {
-        background: linear-gradient(145deg, #0d1117, #161b22);
-        border: 1px solid #30363d;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    }
-    
-    /* Calendario Cerchi Dinamici */
-    .cal-wrapper { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; }
-    .cal-day {
-        width: 60px; height: 60px; border-radius: 50%;
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        font-weight: 700; font-size: 0.9em; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-    .pnl-pos { background: linear-gradient(135deg, #238636 0%, #2ea043 100%); color: white; border: 2px solid #3fb950; box-shadow: 0 0 10px rgba(46, 160, 67, 0.3); }
-    .pnl-neg { background: linear-gradient(135deg, #da3633 0%, #f85149 100%); color: white; border: 2px solid #ff7b72; box-shadow: 0 0 10px rgba(248, 81, 73, 0.3); }
-    .pnl-neu { background-color: #161b22; color: #8b949e; border: 1px solid #30363d; }
-    .pnl-sub { font-size: 0.6em; font-weight: 400; margin-top: 2px; font-family: 'JetBrains Mono'; }
+    # Inizio del modulo - TUTTO quello che segue deve essere rientrato (indentato)
+    with st.form("trade_form_v15", clear_on_submit=True):
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            asset = st.selectbox("Asset", ["MNQ", "MES", "MYM", "M2K", "BTCUSD", "GOLD", "EURUSD"])
+            direction = st.radio("Side", ["Long", "Short"], horizontal=True)
+        with col2:
+            entry = st.number_input("Entry Price", format="%.2f", value=0.0)
+            exit_p = st.number_input("Exit Price", format="%.2f", value=0.0)
+        with col3:
+            contracts = st.number_input("Contracts", value=1.0, step=0.1)
+            multiplier = st.number_input("Point Value ($)", value=2.0)
+        with col4:
+            dt = st.date_input("Exit Date", date.today())
+            session = st.selectbox("Session", ["Asia", "London Open", "NY Morning", "NY Lunch", "NY Afternoon"])
 
-    /* Estetica Input */
-    .stTextInput input, .stNumberInput input, .stSelectbox div {
-        background-color: #0d1117 !important; color: #00ff88 !important; border: 1px solid #30363d !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
+        # Nota: Questi divider e subheader sono ancora DENTRO il "with st.form"
+        st.divider()
+        st.subheader("Technical & Context")
+        
+        # ... (altre colonne per setup, psicologia, ecc.) ...
+        
+        notes = st.text_area("Trade Journal / Mistakes")
 
+        # IL PULSANTE DEVE AVERE GLI STESSI SPAZI DI "notes" O "col1"
+        if st.form_submit_button("COMMIT TO VAULT"):
+            # Logica di calcolo (anche questa rientrata)
+            diff = (exit_p - entry) if direction == "Long" else (entry - exit_p)
+            pnl_final = round(float(diff * contracts * multiplier), 2)
+            
+            payload = {
+                "asset": asset, "direction": direction, "entry_price": float(entry), 
+                "exit_price": float(exit_p), "pnl": pnl_final, "exit_date": str(dt)
+                # ... aggiungi gli altri campi qui ...
+            }
+            
+            try:
+                db.table("trades").insert(payload).execute()
+                st.balloons()
+                st.success(f"✅ REGISTRATO: ${pnl_final}")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Errore: {e}")
+    # Fine del modulo (qui torni a scrivere senza spazi a inizio riga)
 # ==========================================
 # 2. DATABASE CONNECTION (BLINDATA)
 # ==========================================
