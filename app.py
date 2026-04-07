@@ -12,19 +12,16 @@ import time
 # 1. SETUP TERMINALE & DESIGN
 # ==========================================
 st.set_page_config(
-    page_title="TRADECORE V16.0 | ULTIMATE TERMINAL",
+    page_title="TRADECORE V16.1 | STABLE",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# CSS per rendere l'interfaccia professionale e scura
 st.markdown("""
     <style>
     .main { background-color: #050708; color: #e0e0e0; }
     div[data-testid="stSidebar"] { background-color: #0a0c10; border-right: 1px solid #1f2328; }
     .stMetric { background: #0d1117; border: 1px solid #30363d; padding: 15px; border-radius: 10px; }
-    
-    /* Stile Calendario Cerchi */
     .cal-day {
         width: 55px; height: 55px; border-radius: 50%;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -65,14 +62,8 @@ def load_data():
 # 3. BARRA LATERALE
 # ==========================================
 with st.sidebar:
-    st.title("🚀 TRADECORE V16")
-    page = st.radio("NAVIGAZIONE", [
-        "📊 DASHBOARD", 
-        "📅 CALENDARIO", 
-        "📝 LOG ESECUZIONE", 
-        "🗄️ ARCHIVIO DATI",
-        "💰 RISK CALC"
-    ])
+    st.title("🚀 TRADECORE V16.1")
+    page = st.radio("NAVIGAZIONE", ["📊 DASHBOARD", "📅 CALENDARIO", "📝 LOG ESECUZIONE", "🗄️ ARCHIVIO DATI", "💰 RISK CALC"])
     st.divider()
     if st.button("RE-SYNC DATA"):
         st.cache_resource.clear()
@@ -81,23 +72,21 @@ with st.sidebar:
 df_main = load_data()
 
 # ==========================================
-# 4. LOG ESECUZIONE (SBLOCCATO TOTALMENTE)
+# 4. LOG ESECUZIONE
 # ==========================================
 if page == "📝 LOG ESECUZIONE":
     st.title("Professional Execution Log")
-    
     with st.form("ultimate_form", clear_on_submit=True):
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             asset = st.selectbox("Asset", ["MNQ", "NQ", "MES", "ES", "MYM", "M2K", "BTCUSD", "GOLD", "EURUSD"])
             direction = st.radio("Side", ["Long", "Short"], horizontal=True)
         with col2:
-            # SBLOCCATI: max_value impostato a 10 milioni per gestire BTC o Indici alti
             entry = st.number_input("Entry Price", format="%.2f", step=0.25, min_value=0.0, max_value=10000000.0)
             exit_p = st.number_input("Exit Price", format="%.2f", step=0.25, min_value=0.0, max_value=10000000.0)
         with col3:
             contracts = st.number_input("Contracts", value=1.0, min_value=0.01, step=0.01)
-            multiplier = st.number_input("Point Value ($)", value=2.0, help="Nasdaq Micro=2, Mini=20 | ES Micro=5, Mini=50")
+            multiplier = st.number_input("Point Value ($)", value=2.0)
         with col4:
             dt = st.date_input("Date", date.today())
             session = st.selectbox("Session", ["Asia", "London Open", "NY Morning", "NY Afternoon", "After Hours"])
@@ -105,22 +94,16 @@ if page == "📝 LOG ESECUZIONE":
         st.divider()
         c_tech, c_psy = st.columns(2)
         with c_tech:
-            st.subheader("Strategy")
             setup = st.selectbox("Setup Type", ["FVG Inversion", "Liquidity Sweep", "MSS / Shift", "Silver Bullet", "Unicorn", "Turtle Soup", "Order Block", "Breaker"])
             tf = st.selectbox("Timeframe", ["15s", "1m", "5m", "15m", "1h", "4h", "Daily"])
         with c_psy:
-            st.subheader("Psychology")
             emo = st.selectbox("Dominant Emotion", ["Calm/Flow", "FOMO", "Greed", "Fear", "Revenge", "Patience"])
             disc = st.radio("Discipline", ["Perfect", "Minor Rule Break", "Full Tilt"], horizontal=True)
-            
-        notes = st.text_area("Trade Journal (Notes, Mistakes, Context)")
+        notes = st.text_area("Trade Journal")
 
-        # LOGICA DI SALVATAGGIO
         if st.form_submit_button("LOCK TRADE INTO VAULT"):
-            # Calcolo P&L Universale
             diff = (exit_p - entry) if direction == "Long" else (entry - exit_p)
             pnl_calc = round(float(diff * contracts * multiplier), 2)
-            
             payload = {
                 "asset": asset, "direction": direction, "entry_price": float(entry),
                 "exit_price": float(exit_p), "pnl": pnl_calc, "setup": setup,
@@ -128,18 +111,14 @@ if page == "📝 LOG ESECUZIONE":
                 "timeframe": tf, "contracts": float(contracts), "emotion": emo,
                 "psychology": "Flow", "discipline": disc
             }
-            
-            try:
-                db.table("trades").insert(payload).execute()
-                st.balloons()
-                st.success(f"SUCCESS! P&L: ${pnl_calc:,.2f}")
-                time.sleep(1)
-                st.rerun()
-            except Exception as e:
-                st.error(f"Database Error: {e}")
+            db.table("trades").insert(payload).execute()
+            st.balloons()
+            st.success(f"SUCCESS! P&L: ${pnl_calc:,.2f}")
+            time.sleep(1)
+            st.rerun()
 
 # ==========================================
-# 5. DASHBOARD & ANALISI
+# 5. DASHBOARD
 # ==========================================
 elif page == "📊 DASHBOARD":
     st.title("Market Analytics")
@@ -152,29 +131,22 @@ elif page == "📊 DASHBOARD":
         c3.metric("WIN RATE", f"{wr:.1f}%")
         avg = df_main['pnl'].mean()
         c4.metric("AVG TRADE", f"${avg:,.2f}")
-
-        # Equity Curve
         df_sorted = df_main.sort_values('exit_date')
         df_sorted['equity'] = df_sorted['pnl'].cumsum()
-        fig = px.line(df_sorted, x='exit_date', y='equity', title="Growth Curve", template="plotly_dark")
-        fig.update_traces(line_color='#00ff88')
-        st.plotly_chart(fig, use_container_width=True)
+        st.line_chart(df_sorted.set_index('exit_date')['equity'])
     else:
         st.info("Nessun trade registrato.")
 
 # ==========================================
-# 6. CALENDARIO STILE PIKKIT
+# 6. CALENDARIO
 # ==========================================
 elif page == "📅 CALENDARIO":
     st.title("Daily Performance")
     if not df_main.empty:
         df_main['d_only'] = df_main['exit_date'].dt.date
         daily = df_main.groupby('d_only')['pnl'].sum().to_dict()
-        
-        m_idx = st.selectbox("Seleziona Mese", range(1, 13), index=datetime.now().month-1)
+        m_idx = st.selectbox("Mese", range(1, 13), index=datetime.now().month-1)
         cal = calendar.monthcalendar(2026, m_idx)
-        
-        st.subheader(f"{calendar.month_name[m_idx]} 2026")
         for week in cal:
             cols = st.columns(7)
             for i, day in enumerate(week):
@@ -187,8 +159,6 @@ elif page == "📅 CALENDARIO":
                         style = "pnl-pos" if val > 0 else "pnl-neg"
                         txt = f"${val:.0f}"
                     cols[i].markdown(f'<div class="cal-day {style}">{day}<div class="pnl-val">{txt}</div></div>', unsafe_allow_html=True)
-    else:
-        st.info("Database vuoto.")
 
 # ==========================================
 # 7. ARCHIVIO & RISK
@@ -197,11 +167,9 @@ elif page == "🗄️ ARCHIVIO DATI":
     st.title("Trade History")
     if not df_main.empty:
         st.dataframe(df_main.sort_values('exit_date', ascending=False), use_container_width=True)
-        st.divider()
         del_id = st.number_input("ID Trade da cancellare", step=1)
         if st.button("DELETE"):
             db.table("trades").delete().eq("id", del_id).execute()
-            st.success("Cancellato.")
             st.rerun()
 
 elif page == "💰 RISK CALC":
@@ -215,4 +183,4 @@ elif page == "💰 RISK CALC":
         risk_usd = bal * (risk_p/100)
         pos_size = risk_usd / (sl_points * val_point)
         st.metric("Suggested Contracts", f"{pos_size:.2f}")
-        st.write(f"Stai rischiando ${risk_usd:,.2f} per questa operazione.")            st.rerun()
+        st.write(f"Stai rischiando ${risk_usd:,.2f} per questa operazione.")
