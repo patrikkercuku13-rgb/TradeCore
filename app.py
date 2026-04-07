@@ -4,30 +4,24 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from supabase import create_client, Client
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 import calendar
 import time
 
-# --- CONFIGURAZIONE DI ALTO LIVELLO ---
+# --- 1. CONFIGURAZIONE ULTIMATE ---
 st.set_page_config(
-    page_title="TRADECORE V9.0 | PROFESSIONAL TERMINAL",
+    page_title="TRADECORE V10.0 | PROFESSIONAL TERMINAL",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- ENGINE ESTETICO (CSS CUSTOM) ---
+# --- 2. ENGINE ESTETICO (CSS COMPLETO) ---
 st.markdown("""
     <style>
-    /* Sfondo e Testi */
     .main { background-color: #050708; color: #e0e0e0; font-family: 'Inter', sans-serif; }
+    div[data-testid="stSidebar"] { background-color: #0a0c10; border-right: 1px solid #1f2328; }
     
-    /* Sidebar Design */
-    div[data-testid="stSidebar"] {
-        background-color: #0a0c10;
-        border-right: 1px solid #1f2328;
-    }
-
-    /* Container delle Metriche */
+    /* Metriche Dashboard */
     .stMetric {
         background-color: #0d1117;
         border: 1px solid #30363d;
@@ -35,149 +29,118 @@ st.markdown("""
         border-radius: 15px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
-    
-    /* Calendario PnL Professional */
-    .calendar-container { padding: 10px; background: #0d1117; border-radius: 15px; border: 1px solid #30363d; }
+
+    /* Calendario Stile Screenshot */
     .calendar-day {
         width: 100%; aspect-ratio: 1/1; border-radius: 12px;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        font-weight: 700; font-size: 1.2em; transition: all 0.2s ease-in-out;
+        font-weight: 700; font-size: 1.1em; transition: 0.2s;
     }
-    .calendar-day:hover { transform: scale(1.05); filter: brightness(1.2); }
-    .pnl-positive { background: linear-gradient(145deg, #238636, #2ea043); color: white; border: 1px solid #3fb950; box-shadow: 0 0 15px rgba(46, 160, 67, 0.4); }
-    .pnl-negative { background: linear-gradient(145deg, #da3633, #f85149); color: white; border: 1px solid #ff7b72; box-shadow: 0 0 15px rgba(248, 81, 73, 0.4); }
+    .pnl-positive { background: linear-gradient(145deg, #238636, #2ea043); color: white; border: 1px solid #3fb950; box-shadow: 0 0 15px rgba(46, 160, 67, 0.3); }
+    .pnl-negative { background: linear-gradient(145deg, #da3633, #f85149); color: white; border: 1px solid #ff7b72; box-shadow: 0 0 15px rgba(248, 81, 73, 0.3); }
     .pnl-neutral { background-color: #161b22; color: #8b949e; border: 1px solid #30363d; }
-    .pnl-label { font-size: 0.6em; font-family: 'Monaco', monospace; margin-top: 4px; font-weight: 400; }
-    
-    /* Bottoni e Input */
-    .stButton>button {
-        width: 100%; border-radius: 8px; background: linear-gradient(90deg, #1f6feb, #0d419d);
-        color: white; font-weight: bold; border: none; padding: 10px; transition: 0.3s;
+    .pnl-label { font-size: 0.6em; margin-top: 4px; font-weight: 400; font-family: 'Monaco', monospace; }
+
+    /* Form e Input */
+    .stTextInput>div>div>input, .stNumberInput>div>div>input {
+        background-color: #0d1117 !important; color: white !important; border: 1px solid #30363d !important;
     }
-    .stButton>button:hover { box-shadow: 0 0 20px rgba(31, 111, 235, 0.6); transform: translateY(-2px); }
     </style>
 """, unsafe_allow_html=True)
 
-# --- CONNESSIONE E GESTIONE DATI ---
-SUPABASE_URL = "LA_TUA_URL"
+# --- 3. CONNESSIONE DATABASE ---
+SUPABASE_URL = "IL_TUO_URL"
 SUPABASE_KEY = "LA_TUA_KEY"
 
 @st.cache_resource
 def init_connection():
-    try:
-        return create_client(SUPABASE_URL, SUPABASE_KEY)
-    except Exception as e:
-        st.error(f"Errore di connessione al Database: {e}")
-        return None
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 db = init_connection()
 
+# --- 4. ENGINE RECUPERO DATI (CON AUTO-RECOVERY) ---
 def get_trades_from_vault():
     try:
         res = db.table("trades").select("*").order("exit_date").execute()
         df = pd.DataFrame(res.data)
         if not df.empty:
+            # Pulizia e Conversione
             df['exit_date'] = pd.to_datetime(df['exit_date'])
-            df['pnl'] = df['pnl'].astype(float)
-        return df
-    except:
+            df['pnl'] = pd.to_numeric(df['pnl'], errors='coerce').fillna(0)
+            
+            # Recupero Colonne Mancanti (Dati di ieri)
+            required_cols = ['asset', 'direction', 'setup', 'session', 'psychology', 'emotion', 'discipline', 'notes']
+            for col in required_cols:
+                if col not in df.columns:
+                    df[col] = "N/A (Legacy)"
+            return df
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Errore Database: {e}")
         return pd.DataFrame()
 
-# --- MODULI ANALITICI ---
-
-def calculate_advanced_metrics(df):
-    if df.empty: return {}
-    total_trades = len(df)
-    winning_trades = len(df[df['pnl'] > 0])
-    losing_trades = len(df[df['pnl'] < 0])
-    win_rate = (winning_trades / total_trades) * 100
-    
-    gross_profit = df[df['pnl'] > 0]['pnl'].sum()
-    gross_loss = abs(df[df['pnl'] < 0]['pnl'].sum())
-    profit_factor = gross_profit / gross_loss if gross_loss != 0 else gross_profit
-    
-    avg_win = df[df['pnl'] > 0]['pnl'].mean() if winning_trades > 0 else 0
-    avg_loss = df[df['pnl'] < 0]['pnl'].mean() if losing_trades > 0 else 0
-    risk_reward_ratio = abs(avg_win / avg_loss) if avg_loss != 0 else 0
-    
-    df = df.sort_values('exit_date')
-    df['equity'] = df['pnl'].cumsum()
-    df['peak'] = df['equity'].cummax()
-    df['drawdown'] = df['peak'] - df['equity']
-    max_dd = df['drawdown'].max()
-    
-    return {
-        "wr": win_rate, "pf": profit_factor, "rr": risk_reward_ratio,
-        "max_dd": max_dd, "avg_trade": df['pnl'].mean(), "total_pnl": df['pnl'].sum()
-    }
-
-# --- NAVIGATION ---
+# --- 5. LOGICA SIDEBAR ---
 with st.sidebar:
-    st.markdown("## TRADECORE `v9.0`")
+    st.markdown("## TRADECORE `v10.0`")
     st.divider()
     page = st.radio("SISTEMA", [
         "📊 DASHBOARD CORE", 
-        "📅 CALENDARIO PERFORMANCE", 
-        "📝 ESECUZIONE TRADE", 
+        "📅 CALENDARIO P&L", 
+        "📝 LOG ESECUZIONE", 
         "🧠 ANALISI PSICOLOGICA", 
         "📈 ANALISI AVANZATA", 
         "🗄️ DATABASE INTEGRALE",
         "⚙️ API & SETTINGS"
     ])
     st.divider()
-    if db: st.success("Database Connection: ACTIVE")
-    else: st.error("Database Connection: OFFLINE")
+    st.caption("Terminal Status: Operational")
 
 df_main = get_trades_from_vault()
 
-# --- 1. DASHBOARD CORE ---
+# --- 6. DASHBOARD CORE ---
 if page == "📊 DASHBOARD CORE":
-    st.title("Market Execution Terminal")
+    st.title("Market Execution Dashboard")
     if not df_main.empty:
-        m = calculate_advanced_metrics(df_main)
+        # Calcolo Metriche
+        total_pnl = df_main['pnl'].sum()
+        win_rate = (len(df_main[df_main['pnl'] > 0]) / len(df_main)) * 100
+        df_main = df_main.sort_values('exit_date')
+        df_main['equity'] = df_main['pnl'].cumsum()
+        
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("TOTAL P&L", f"${m['total_pnl']:,.2f}")
-        c2.metric("WIN RATE", f"{m['wr']:.1f}%")
-        c3.metric("PROFIT FACTOR", f"{m['pf']:.2f}")
-        c4.metric("MAX DRAWDOWN", f"-${m['max_dd']:,.2f}")
+        c1.metric("TOTAL P&L", f"${total_pnl:,.2f}")
+        c2.metric("WIN RATE", f"{win_rate:.1f}%")
+        c3.metric("TRADES", len(df_main))
+        c4.metric("MAX DRAWDOWN", f"-${abs(df_main['pnl'].min()):,.2f}")
 
-        # Equity Curve Principale
-        st.subheader("Accumulated Performance")
+        # Equity Curve
         fig_equity = go.Figure()
-        fig_equity.add_trace(go.Scatter(
-            x=df_main['exit_date'], y=df_main['equity'],
-            fill='tozeroy', line=dict(color='#00ff88', width=3),
-            name="Equity"
-        ))
-        fig_equity.update_layout(template="plotly_dark", height=450, margin=dict(l=0, r=0, t=0, b=0))
+        fig_equity.add_trace(go.Scatter(x=df_main['exit_date'], y=df_main['equity'], fill='tozeroy', line=dict(color='#00ff88', width=3)))
+        fig_equity.update_layout(template="plotly_dark", height=400, title="Equity Growth")
         st.plotly_chart(fig_equity, use_container_width=True)
     else:
-        st.info("Nessun dato presente. Inizia caricando un'operazione nel Log Esecuzione.")
+        st.info("Database pronto. Inizia a inserire le operazioni per vedere le analisi.")
 
-# --- 2. CALENDARIO PERFORMANCE ---
-elif page == "📅 CALENDARIO PERFORMANCE":
-    st.title("Interactive PnL Calendar")
+# --- 7. CALENDARIO P&L (STILE RICHIESTO) ---
+elif page == "📅 CALENDARIO P&L":
+    st.title("PnL Visual Calendar")
     if not df_main.empty:
         df_main['date_only'] = df_main['exit_date'].dt.date
         daily_pnl = df_main.groupby('date_only')['pnl'].sum().to_dict()
         
-        # Selezione Mese
         now = datetime.now()
-        col_m1, col_m2 = st.columns([1, 4])
-        sel_month = col_m1.selectbox("Mese", list(range(1, 13)), index=now.month-1)
+        cal = calendar.monthcalendar(now.year, now.month)
         
-        cal = calendar.monthcalendar(now.year, sel_month)
-        st.markdown(f"### {calendar.month_name[sel_month]} {now.year}")
-        
-        days_header = st.columns(7)
+        st.markdown(f"### {calendar.month_name[now.month]} {now.year}")
+        cols_h = st.columns(7)
         for i, d in enumerate(["LUN", "MAR", "MER", "GIO", "VEN", "SAB", "DOM"]):
-            days_header[i].markdown(f"<center><small>{d}</small></center>", unsafe_allow_html=True)
+            cols_h[i].markdown(f"<center><small>{d}</small></center>", unsafe_allow_html=True)
 
         for week in cal:
             cols = st.columns(7)
             for i, day in enumerate(week):
                 if day != 0:
-                    curr_d = date(now.year, sel_month, day)
+                    curr_d = date(now.year, now.month, day)
                     val = daily_pnl.get(curr_d, None)
                     style = "pnl-neutral"
                     lbl = ""
@@ -185,136 +148,75 @@ elif page == "📅 CALENDARIO PERFORMANCE":
                         style = "pnl-positive" if val > 0 else "pnl-negative"
                         lbl = f"{val:+.0f}"
                     cols[i].markdown(f'<div class="calendar-day {style}">{day}<div class="pnl-label">{lbl}</div></div>', unsafe_allow_html=True)
-            st.write("")
-    else:
-        st.warning("Dati insufficienti per generare il calendario.")
+        st.write("")
 
-# --- 3. ESECUZIONE TRADE ---
-elif page == "📝 ESECUZIONE TRADE":
-    st.title("Execution Entry Vault")
-    with st.form("trade_entry_form", clear_on_submit=True):
-        f1, f2, f3 = st.columns(3)
-        with f1:
-            asset = st.text_input("Asset Symbol", "MNQ1!")
-            direction = st.selectbox("Side", ["Long", "Short"])
-            size = st.number_input("Lots/Contracts", min_value=0.01, step=0.01)
-        with f2:
-            entry = st.number_input("Entry Price", format="%.5f")
-            exit_p = st.number_input("Exit Price", format="%.5f")
-            pt_val = st.number_input("Multiplier (Point Value)", value=20.0)
-        with f3:
-            setup = st.selectbox("Strategy Setup", ["FVG Inversion", "Silver Bullet", "Liquidity Sweep", "MSS/BMS", "Turtle Soup"])
-            session = st.selectbox("Market Session", ["London Open", "NY Morning", "NY Afternoon", "Asia"])
-            exit_date_sel = st.date_input("Execution Date", date.today())
-
+# --- 8. LOG ESECUZIONE (PSICOLOGIA INCLUSA) ---
+elif page == "📝 LOG ESECUZIONE":
+    st.title("New Trade Entry")
+    with st.form("main_entry", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        asset = c1.text_input("Asset", value="MNQ1!")
+        direction = c2.selectbox("Side", ["Long", "Short"])
+        size = c3.number_input("Lots", min_value=0.01)
+        
+        c4, c5, c6 = st.columns(3)
+        entry = c4.number_input("Entry Price", format="%.5f")
+        exit_p = c5.number_input("Exit Price", format="%.5f")
+        pt_val = c6.number_input("Point Value", value=20.0)
+        
         st.divider()
-        st.subheader("Psychological Logging")
-        p1, p2, p3 = st.columns(3)
-        mindset = p1.select_slider("Pre-Trade Mindset", options=["Low Focus", "Neutral", "Good", "High Flow", "Over-Excited"])
-        emotion = p2.selectbox("Primary Emotion", ["Calm", "Anxiety", "Greed", "Fear", "Patience"])
-        discipline = p3.radio("Discipline Score", ["Perfect Execution", "Minor Error", "Major Violation (FOMO/Revenge)"])
+        st.subheader("Context & Psychology")
+        c7, c8, c9 = st.columns(3)
+        setup = c7.selectbox("Setup", ["FVG", "Liquidity Sweep", "MSS", "Silver Bullet"])
+        session = c8.selectbox("Session", ["London", "NY Morning", "NY Afternoon"])
+        exit_date = c9.date_input("Date", date.today())
         
-        notes = st.text_area("Execution Notes (Why did you take this trade?)")
+        mindset = st.select_slider("Mindset", options=["Poor", "Neutral", "Focused", "Peak Performance"])
+        emotion = st.selectbox("Primary Emotion", ["Calm", "Anxiety", "Fear", "Greed", "Patience"])
+        discipline = st.radio("Did you follow the plan?", ["Yes", "No - FOMO", "No - Revenge", "No - Early Exit"])
+        notes = st.text_area("Trade Review / Mistakes")
         
-        if st.form_submit_button("COMMIT TO PERMANENT RECORD"):
-            # Calcolo PnL
-            raw_pnl = (exit_p - entry) * size * pt_val if direction == "Long" else (entry - exit_p) * size * pt_val
+        if st.form_submit_button("SAVE TRADE"):
+            pnl_val = (exit_p - entry) * size * pt_val if direction == "Long" else (entry - exit_p) * size * pt_val
             payload = {
                 "asset": asset, "direction": direction, "entry_price": entry, "exit_price": exit_p,
-                "pnl": raw_pnl, "setup": setup, "session": session, "exit_date": str(exit_date_sel),
+                "pnl": pnl_val, "setup": setup, "session": session, "exit_date": str(exit_date),
                 "psychology": mindset, "emotion": emotion, "discipline": discipline, "notes": notes
             }
             db.table("trades").insert(payload).execute()
-            st.success("Operazione registrata con successo nel database.")
+            st.success("Trade salvato.")
             time.sleep(1)
             st.rerun()
 
-# --- 4. ANALISI PSICOLOGICA ---
+# --- 9. ANALISI PSICOLOGICA & AVANZATA (DOPPIA PROFONDITA') ---
 elif page == "🧠 ANALISI PSICOLOGICA":
-    st.title("Trading Psychology Intelligence")
+    st.title("Trading Psychology Insights")
     if not df_main.empty:
-        col_psy1, col_psy2 = st.columns(2)
-        
-        # Correlazione Emozione / PnL
-        fig_emo = px.bar(df_main.groupby('emotion')['pnl'].sum().reset_index(), 
-                         x='emotion', y='pnl', color='pnl', title="PnL by Primary Emotion",
-                         template="plotly_dark", color_continuous_scale="RdYlGn")
-        col_psy1.plotly_chart(fig_emo, use_container_width=True)
-        
-        # Impatto della Disciplina
-        fig_disc = px.box(df_main, x='discipline', y='pnl', color='discipline',
-                          title="Profit Distribution by Discipline", template="plotly_dark")
-        col_psy2.plotly_chart(fig_disc, use_container_width=True)
-        
-        # Mindset Performance Heatmap
-        st.subheader("Mindset vs Success Rate")
-        mindset_perf = df_main.groupby('psychology')['pnl'].agg(['sum', 'count']).reset_index()
-        st.dataframe(mindset_perf, use_container_width=True)
-    else:
-        st.info("Logga almeno 5 trade per vedere i pattern psicologici.")
+        col1, col2 = st.columns(2)
+        fig1 = px.bar(df_main.groupby('emotion')['pnl'].sum().reset_index(), x='emotion', y='pnl', title="PnL vs Emotion", template="plotly_dark")
+        col1.plotly_chart(fig1, use_container_width=True)
+        fig2 = px.box(df_main, x='discipline', y='pnl', title="PnL Distribution vs Discipline", template="plotly_dark")
+        col2.plotly_chart(fig2, use_container_width=True)
 
-# --- 5. ANALISI AVANZATA ---
 elif page == "📈 ANALISI AVANZATA":
     st.title("Advanced Quantitative Analysis")
     if not df_main.empty:
-        tab1, tab2, tab3 = st.tabs(["Strategy Efficiency", "Time Analysis", "Risk Analysis"])
-        
-        with tab1:
-            col_st1, col_st2 = st.columns(2)
-            fig_setup = px.sunburst(df_main, path=['setup', 'direction'], values='pnl', 
-                                    color='pnl', color_continuous_scale='RdYlGn', title="Strategy Performance Map")
-            col_st1.plotly_chart(fig_setup, use_container_width=True)
-            
-            # Win Rate per Setup
-            setup_wr = df_main.groupby('setup').apply(lambda x: (len(x[x['pnl']>0])/len(x))*100).reset_index(name='Win Rate %')
-            col_st2.bar_chart(setup_wr.set_index('setup'))
+        col1, col2 = st.columns(2)
+        fig3 = px.pie(df_main, names='setup', values='pnl', title="PnL by Setup Strategy", template="plotly_dark")
+        col1.plotly_chart(fig3, use_container_width=True)
+        fig4 = px.bar(df_main.groupby('session')['pnl'].sum().reset_index(), x='session', y='pnl', title="PnL by Session", template="plotly_dark")
+        col2.plotly_chart(fig4, use_container_width=True)
 
-        with tab2:
-            fig_session = px.bar(df_main.groupby('session')['pnl'].sum().reset_index(), 
-                                 x='session', y='pnl', title="Profit by Market Session", template="plotly_dark")
-            st.plotly_chart(fig_session, use_container_width=True)
-
-        with tab3:
-            # Calcolo Drawdown
-            df_main['peak'] = df_main['equity'].cummax()
-            df_main['drawdown_val'] = df_main['peak'] - df_main['equity']
-            fig_dd = px.area(df_main, x='exit_date', y='drawdown_val', title="Drawdown Exposure Over Time",
-                             color_discrete_sequence=['#ff4b4b'], template="plotly_dark")
-            st.plotly_chart(fig_dd, use_container_width=True)
-
-# --- 6. DATABASE INTEGRALE ---
+# --- 10. DATABASE INTEGRALE ---
 elif page == "🗄️ DATABASE INTEGRALE":
-    st.title("Portfolio Database Vault")
-    st.markdown("Visualizzazione cruda di tutti i record storici salvati nel cloud.")
-    
-    # Filtri
-    search = st.text_input("Filtra per Asset (es. NQ)")
-    if search:
-        df_display = df_main[df_main['asset'].str.contains(search, case=False)]
-    else:
-        df_display = df_main
-        
-    st.dataframe(df_display.sort_values('exit_date', ascending=False), use_container_width=True)
-    
-    st.divider()
-    st.subheader("Admin Operations")
-    id_to_del = st.number_input("ID del record da eliminare", step=1)
-    if st.button("ELIMINA RECORD PERMANENTEMENTE"):
-        db.table("trades").delete().eq("id", id_to_del).execute()
-        st.warning(f"Record {id_to_del} rimosso. Ricaricando...")
-        time.sleep(1)
+    st.title("Full Archive Vault")
+    st.dataframe(df_main.sort_values('exit_date', ascending=False), use_container_width=True)
+    id_del = st.number_input("Delete ID", step=1)
+    if st.button("DELETE PERMANENTLY"):
+        db.table("trades").delete().eq("id", id_del).execute()
         st.rerun()
 
-# --- 7. SETTINGS API ---
+# --- 11. API & SETTINGS ---
 elif page == "⚙️ API & SETTINGS":
-    st.title("Terminal Configuration")
-    col_set1, col_set2 = st.columns(2)
-    with col_set1:
-        st.subheader("Broker API (Coming Soon)")
-        st.text_input("API Access Key", type="password")
-        st.text_input("API Secret Key", type="password")
-        st.selectbox("Data Provider", ["MetaTrader 5", "Interactive Brokers", "Rithmic", "Tradovate"])
-    with col_set2:
-        st.subheader("Webhook Automation")
-        st.code("https://api.tradecore.io/v9/webhook/your-unique-id")
-        st.info("Usa questo URL nei tuoi Alert di TradingView per loggare i trade automaticamente.")
+    st.title("Automation & Connection")
+    st.info("Integrazione API MetaTrader/TradingView prevista per il Giorno 5.")
