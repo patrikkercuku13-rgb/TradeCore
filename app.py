@@ -184,3 +184,43 @@ elif page == "💰 RISK CALC":
         pos_size = risk_usd / (sl_points * val_point)
         st.metric("Suggested Contracts", f"{pos_size:.2f}")
         st.write(f"Stai rischiando ${risk_usd:,.2f} per questa operazione.")
+        # ==========================================
+# 8. SECURITY & CUSTOM BRANDING (HIDE STREAMLIT)
+# ==========================================
+
+# 1. Funzione per nascondere il menu Streamlit e il footer
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            /* Questo serve per rendere l'app più pulita */
+            .stApp { margin-top: -20px; }
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
+# 2. Sistema di Login Semplice
+def check_password():
+    """Restituisce True se l'utente ha inserito la password corretta."""
+    def password_entered():
+        if st.session_state["password"] == "IL_TUO_TRADECORE_2026": # CAMBIA QUESTA PASSWORD
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Rimuove la password dallo stato per sicurezza
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        # Schermata iniziale di Login
+        st.markdown("<h1 style='text-align: center;'>🔐 TRADECORE ACCESS</h1>", unsafe_allow_html=True)
+        st.text_input("Inserisci il codice di accesso", type="password", on_change=password_entered, key="password")
+        if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+            st.error("😕 Password errata. Riprova.")
+        return False
+    else:
+        return True
+
+# 3. Come usare il login nel codice principale
+# Avvolgeremo tutto il resto del codice dentro un:
+# if check_password():
+#     ... qui va tutto il resto della tua app ...
