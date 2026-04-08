@@ -56,7 +56,31 @@ st.markdown("""
 # 3. LOGICA PRINCIPALE
 # ==========================================
 if check_password():
+    df_main = load_data() 
+    # ==========================================
+# 3. FUNZIONI DI SISTEMA (SOPRA IL MAIN)
+# ==========================================
+
+def check_password():
+    """Verifica se l'utente è autorizzato"""
+    if "password_correct" not in st.session_state:
+        st.markdown("<h2 style='text-align:center;'>🔐 TRADECORE ACCESS</h2>", unsafe_allow_html=True)
+        # Crea un box per la password
+        pwd = st.text_input("Security Token", type="password")
+        if st.button("Unlock"):
+            if pwd == "2026":
+                st.session_state["password_correct"] = True
+                st.rerun() # Riavvia per mostrare il contenuto sbloccato
+            else:
+                st.error("Password Errata")
+        return False
+    return True
+
+# Solo DOPO aver definito la funzione qui sopra, puoi chiamarla:
+if check_password():
+    # Qui dentro va tutto il resto del tuo codice (Dashboard, Diario, ecc.)
     df_main = load_data()
+    # ... resto del codice ...
     
     # Sidebar
     st.sidebar.title("⚡ TRADECORE v3")
