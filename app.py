@@ -17,59 +17,41 @@ SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # CSS per pulire l'interfaccia e creare il calendario
+# --- STILE E DESIGN (CSS) ---
 st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+    /* Nascondi elementi Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Sfondo e colori */
     .stApp { background-color: #0e1117; color: #ffffff; }
-    .cal-day {
-        min-height: 80px; border-radius: 10px; padding: 10px;
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        border: 1px solid #30363d; font-weight: bold;
+    
+    /* Fix per Mobile: Metriche e Bottoni */
+    [data-testid="stMetricValue"] {
+        font-size: 1.8rem !important;
     }
-    .pnl-pos { background-color: #002b1b; border: 1px solid #00ff88; color: #00ff88; }
-    .pnl-neg { background-color: #3d0101; border: 1px solid #ff4b4b; color: #ff4b4b; }
+    .stButton>button {
+        width: 100%;
+        border-radius: 5px;
+        background-color: #00ff88;
+        color: black;
+        font-weight: bold;
+        height: 3em;
+    }
+
+    /* Stile Calendario */
+    .cal-day {
+        min-height: 70px; border-radius: 8px; padding: 5px;
+        display: flex; flex-direction: column; align-items: center; 
+        justify-content: center; border: 1px solid #30363d;
+    }
+    .pnl-pos { background-color: #002b1b; color: #00ff88; border: 1px solid #00ff88; }
+    .pnl-neg { background-color: #3d0101; color: #ff4b4b; border: 1px solid #ff4b4b; }
     .pnl-neu { background-color: #161b22; color: #8b949e; }
     </style>
     """, unsafe_allow_html=True)
-/* Rende le metriche più leggibili su mobile */
-[data-testid="stMetricValue"] {
-    font-size: 1.8rem !important;
-}
-
-/* Allarga i tasti per le dita */
-.stButton>button {
-    height: 3em !important;
-    font-weight: bold !important;
-}
-
-# ==========================================
-# 2. FUNZIONI DI SISTEMA
-# ==========================================
-def check_password():
-    if "password_correct" not in st.session_state:
-        st.markdown("<h2 style='text-align:center;'>🔐 TRADECORE ACCESS</h2>", unsafe_allow_html=True)
-        pwd = st.text_input("Security Token", type="password")
-        if st.button("Unlock"):
-            if pwd == "2026":
-                st.session_state["password_correct"] = True
-                st.rerun()
-            else:
-                st.error("Password Errata")
-        return False
-    return True
-
-@st.cache_data(ttl=60)
-def load_data():
-    try:
-        res = supabase.table("trades").select("*").execute()
-        df = pd.DataFrame(res.data)
-        if not df.empty:
-            df['exit_date'] = pd.to_datetime(df['exit_date'])
-            df['pnl'] = df['pnl'].astype(float)
-        return df
-    except:
-        return pd.DataFrame()
-
 # ==========================================
 # 3. LOGICA PRINCIPALE
 # ==========================================
