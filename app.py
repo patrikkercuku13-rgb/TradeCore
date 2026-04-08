@@ -8,7 +8,7 @@ import plotly.express as px
 import calendar
 
 # 1. CONFIGURAZIONE
-st.set_page_config(page_title="TRADECORE TERMINAL", layout="wide")
+st.set_page_config(page_title="TradeCore", layout="wide")
 
 # CREDENZIALI
 URL = "https://aurjuibhbuinxzirpjkt.supabase.co"
