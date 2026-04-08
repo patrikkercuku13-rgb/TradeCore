@@ -1,154 +1,164 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from datetime import datetime, date
 from supabase import create_client, Client
 import plotly.express as px
 import calendar
-import base64
 
-# --- CONFIGURAZIONE SCHEDA BROWSER ---
-st.set_page_config(page_title="TRADECORE", page_icon="🎯", layout="wide")
+# 1. SETUP CORE
+st.set_page_config(page_title="TRADECORE TERMINAL", page_icon="🎯", layout="wide")
 
-# --- CONNESSIONE DATABASE ---
+# CONNESSIONE SUPABASE
 URL = "https://aurjuibhbuinxzirpjkt.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cmp1aWJoYnVpbnh6aXJwamt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODE0MjEsImV4cCI6MjA5MTA1NzQyMX0.xSZBDGACcF6yDpkvuKQZottdKINFM0JM3iuRrI987lE"
 supabase: Client = create_client(URL, KEY)
 
-# --- CSS PERSONALIZZATO (DARK & GREEN) ---
+# 2. DESIGN CSS (Ispirato ai tuoi screenshot)
 st.markdown("""
 <style>
-    .stApp { background-color: #050505; color: #ffffff; }
-    [data-testid="stSidebar"] { background-color: #0a0a0a; border-right: 1px solid #1f1f1f; }
-    .stMetric { background: #111; border: 1px solid #222; border-radius: 12px; padding: 15px !important; }
-    [data-testid="stMetricValue"] { color: #00ff88 !important; font-family: monospace; }
+    .stApp { background-color: #050505; color: #ffffff; font-family: 'Inter', sans-serif; }
+    [data-testid="stSidebar"] { background-color: #080808; border-right: 1px solid #1f1f1f; }
+    
+    /* Metriche stile Terminale */
+    .stMetric { background: #0f0f0f; border: 1px solid #1f1f1f; border-radius: 8px; padding: 20px !important; }
+    [data-testid="stMetricValue"] { color: #00ff88 !important; font-size: 1.8rem !important; font-weight: 700; }
+    
+    /* Calendario */
     .cal-day { 
-        min-height: 70px; border-radius: 8px; border: 1px solid #1f1f1f;
-        display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px;
+        min-height: 80px; border: 1px solid #1f1f1f; border-radius: 6px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
     }
-    .win { background: rgba(0, 255, 136, 0.15); color: #00ff88; border: 1px solid #00ff88; }
-    .loss { background: rgba(255, 75, 75, 0.15); color: #ff4b4b; border: 1px solid #ff4b4b; }
-    .brand-title { font-size: 2.8rem; font-weight: 900; letter-spacing: 6px; color: #00ff88; text-align: center; }
+    .win { background: rgba(0, 255, 136, 0.1); border: 1px solid #00ff88; color: #00ff88; }
+    .loss { background: rgba(255, 75, 75, 0.1); border: 1px solid #ff4b4b; color: #ff4b4b; }
+    
+    /* Branding */
+    .brand-header { font-size: 3.5rem; font-weight: 900; color: #00ff88; text-align: center; letter-spacing: 10px; padding: 40px 0; text-shadow: 0 0 20px rgba(0,255,136,0.3); }
 </style>
 """, unsafe_allow_html=True)
 
-# --- FUNZIONE CARICAMENTO DATI (FORZATA) ---
-def get_data_live():
+# 3. MOTORE DATI (Con Diagnosi)
+def fetch_trades():
     try:
-        # Richiesta diretta senza cache
         res = supabase.table("trades").select("*").execute()
-        df_db = pd.DataFrame(res.data)
-        if not df_db.empty:
-            df_db['exit_date'] = pd.to_datetime(df_db['exit_date']).dt.date
-            df_db['pnl'] = pd.to_numeric(df_db['pnl'])
-            df_db['psychology_score'] = pd.to_numeric(df_db['psychology_score'])
-            return df_db.sort_values('exit_date', ascending=False)
-        return pd.DataFrame()
-    except:
-        return pd.DataFrame()
+        df = pd.DataFrame(res.data)
+        if not df.empty:
+            # Convertiamo i nomi colonne in minuscolo per evitare errori di battitura nel DB
+            df.columns = [c.lower() for c in df.columns]
+            
+            # Fix date e numeri
+            date_col = 'exit_date' if 'exit_date' in df.columns else df.columns[0]
+            df[date_col] = pd.to_datetime(df[date_col]).dt.date
+            if 'pnl' in df.columns:
+                df['pnl'] = pd.to_numeric(df['pnl'], errors='coerce').fillna(0)
+            return df, None
+        return pd.DataFrame(), "Database collegato ma vuoto."
+    except Exception as e:
+        return pd.DataFrame(), f"Errore di connessione: {str(e)}"
 
-# --- LOGIN ---
-if "logged_in" not in st.session_state:
-    st.markdown("<div class='brand-title'>TRADECORE</div>", unsafe_allow_html=True)
-    pw = st.text_input("Security Token", type="password")
-    if st.button("AUTHORIZE"):
-        if pw == "2026":
-            st.session_state.logged_in = True
-            st.rerun()
+# 4. LOGIN SISTEMA
+if "authorized" not in st.session_state:
+    st.markdown("<div class='brand-header'>TRADECORE</div>", unsafe_allow_html=True)
+    with st.container():
+        c1, c2, c3 = st.columns([1,2,1])
+        with c2:
+            token = st.text_input("SECURITY TOKEN", type="password")
+            if st.button("AUTHORIZE ACCESS"):
+                if token == "2026":
+                    st.session_state.authorized = True
+                    st.rerun()
     st.stop()
 
-# --- NAVIGAZIONE ---
-df = get_data_live()
-st.sidebar.markdown("<div style='color:#00ff88; font-weight:900; font-size:20px; text-align:center;'>TRADECORE</div>", unsafe_allow_html=True)
-nav = st.sidebar.radio("NAV", ["🏠 HOME", "📊 DASHBOARD", "📈 ANALYTICS", "📝 LOG TRADE", "🧠 PSYCHOLOGY", "⚙️ SETTINGS"])
+# 5. CARICAMENTO EFFETTIVO
+df, error_msg = fetch_trades()
 
-if "starting_bal" not in st.session_state:
-    st.session_state.starting_bal = 50000.0
+# 6. SIDEBAR
+st.sidebar.markdown("<h1 style='color:#00ff88; text-align:center;'>TRADECORE</h1>", unsafe_allow_html=True)
+menu = st.sidebar.radio("SISTEMA", ["🏠 OVERVIEW", "📈 ANALYTICS", "📊 CALENDARIO", "📝 LOG TRADE", "⚙️ SETTINGS"])
+
+if "bal_iniziale" not in st.session_state:
+    st.session_state.bal_iniziale = 50000.0
 
 # ==========================================
 # PAGINE
 # ==========================================
 
-if nav == "🏠 HOME":
-    st.markdown("<div class='brand-title'>TRADECORE</div>", unsafe_allow_html=True)
-    total_pnl = df['pnl'].sum() if not df.empty else 0
+if menu == "🏠 OVERVIEW":
+    st.markdown("<div class='brand-header'>TRADECORE</div>", unsafe_allow_html=True)
     
-    c1, c2, c3 = st.columns(3)
-    c1.metric("ACCOUNT", f"${st.session_state.starting_bal + total_pnl:,.2f}")
-    c2.metric("TOTAL P&L", f"${total_pnl:,.2f}", f"{(total_pnl/st.session_state.starting_bal)*100:.2f}%")
-    c3.metric("EXECUTIONS", len(df))
+    if error_msg: st.warning(error_msg)
     
-    st.subheader("Last Entries")
+    pnl_totale = df['pnl'].sum() if not df.empty and 'pnl' in df.columns else 0
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("ACCOUNT BALANCE", f"${st.session_state.bal_iniziale + pnl_totale:,.2f}")
+    col2.metric("NET PROFIT", f"${pnl_totale:,.2f}")
+    col3.metric("TOTAL TRADES", len(df))
+    
+    st.divider()
+    st.subheader("Ultime Esecuzioni")
     if not df.empty:
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.info("No data found in Supabase. Go to 'LOG TRADE' to start.")
+        st.dataframe(df.head(10), use_container_width=True)
 
-elif nav == "📊 DASHBOARD":
-    st.header("📅 Trading Calendar")
+elif menu == "📈 ANALYTICS":
+    st.header("📈 Performance Analytics")
+    if not df.empty and 'pnl' in df.columns:
+        # Equity Curve
+        df_sorted = df.sort_values(df.columns[0]) # ordina per data
+        df_sorted['equity'] = df_sorted['pnl'].cumsum() + st.session_state.bal_iniziale
+        
+        st.plotly_chart(px.line(df_sorted, x=df_sorted.columns[0], y='equity', 
+                               title="Equity Curve").update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)'), 
+                        use_container_width=True)
+        
+        # Win Rate
+        wins = len(df[df['pnl'] > 0])
+        wr = (wins / len(df)) * 100
+        st.metric("Win Rate", f"{wr:.1f}%")
+    else:
+        st.info("Dati insufficienti per i grafici.")
+
+elif menu == "📊 CALENDARIO":
+    st.header("📅 Calendario Profitti")
     if not df.empty:
-        daily_res = df.groupby('exit_date')['pnl'].sum()
+        # Troviamo la colonna data corretta
+        d_col = 'exit_date' if 'exit_date' in df.columns else df.columns[0]
+        daily_pnl = df.groupby(d_col)['pnl'].sum()
+        
         cal = calendar.monthcalendar(date.today().year, date.today().month)
         for week in cal:
             cols = st.columns(7)
             for i, day in enumerate(week):
                 if day != 0:
-                    curr_d = date(date.today().year, date.today().month, day)
-                    pnl_val = daily_res.get(curr_d, 0)
-                    status = "win" if pnl_val > 0 else "loss" if pnl_val < 0 else ""
-                    cols[i].markdown(f"<div class='cal-day {status}'><b>{day}</b><br>${pnl_val:.0f}</div>", unsafe_allow_html=True)
-    else:
-        st.warning("Log trades to see the calendar.")
+                    curr_date = date(date.today().year, date.today().month, day)
+                    val = daily_pnl.get(curr_date, 0)
+                    cl = "win" if val > 0 else "loss" if val < 0 else ""
+                    cols[i].markdown(f"<div class='cal-day {cl}'><b>{day}</b><br>${val:.0f}</div>", unsafe_allow_html=True)
 
-elif nav == "📈 ANALYTICS":
-    st.header("📈 Performance Stats")
-    if not df.empty:
-        df_sorted = df.sort_values('exit_date')
-        df_sorted['equity'] = df_sorted['pnl'].cumsum() + st.session_state.starting_bal
-        
-        st.plotly_chart(px.line(df_sorted, x='exit_date', y='equity', title="Equity Curve").update_layout(template="plotly_dark"), use_container_width=True)
-        
+elif menu == "📝 LOG TRADE":
+    st.header("📝 Nuova Registrazione")
+    with st.form("trade_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
-        wr = (len(df[df['pnl'] > 0]) / len(df)) * 100
-        c1.metric("Win Rate", f"{wr:.1f}%")
-        c2.metric("Avg Trade", f"${df['pnl'].mean():,.2f}")
-    else:
-        st.error("Not enough data.")
-
-elif nav == "📝 LOG TRADE":
-    st.header("📝 New Execution")
-    with st.form("add_trade", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        asset = c1.selectbox("Asset", ["NASDAQ", "EURUSD", "GOLD", "DAX", "BTC"])
+        asset = c1.selectbox("Market", ["NASDAQ", "EURUSD", "GOLD", "DAX", "BTC"])
         side = c1.radio("Side", ["LONG", "SHORT"], horizontal=True)
-        size = c2.number_input("Size", value=1.0, step=0.1)
+        size = c2.number_input("Size", value=1.0)
         entry = c1.number_input("Entry Price", format="%.5f")
         exit_p = c2.number_input("Exit Price", format="%.5f")
-        engine = st.selectbox("Mode", ["Futures", "Forex"])
-        score = st.select_slider("Mindset", options=[1,2,3,4,5], value=5)
+        tipo = st.selectbox("Engine", ["Futures", "Forex"])
         note = st.text_area("Journal")
         
-        if st.form_submit_button("SAVE TO CLOUD"):
-            mult = 20 if "NASDAQ" in asset else 100000 if engine == "Forex" else 50
-            final_pnl = (exit_p - entry) * size * mult if side == "LONG" else (entry - exit_p) * size * mult
+        if st.form_submit_button("REGISTRA"):
+            mult = 20 if "NASDAQ" in asset else 100000 if tipo == "Forex" else 50
+            pnl_final = (exit_p - entry) * size * mult if side == "LONG" else (entry - exit_p) * size * mult
             
             supabase.table("trades").insert({
-                "asset": asset, "pnl": final_pnl, "size": size, 
-                "notes": note, "psychology_score": score, 
-                "exit_date": str(date.today())
+                "asset": asset, "pnl": pnl_final, "size": size, 
+                "notes": note, "exit_date": str(date.today()), "psychology_score": 5
             }).execute()
-            st.success("SUCCESS! Trade saved.")
+            st.success(f"Trade registrato! PNL: ${pnl_final:.2f}")
             st.rerun()
 
-elif nav == "🧠 PSYCHOLOGY":
-    st.header("🧠 Psychology Analysis")
-    if not df.empty:
-        st.plotly_chart(px.box(df, x="psychology_score", y="pnl").update_layout(template="plotly_dark"))
-    else:
-        st.info("Log more trades.")
-
-elif nav == "⚙️ SETTINGS":
+elif menu == "⚙️ SETTINGS":
     st.header("⚙️ Settings")
-    st.session_state.starting_bal = st.number_input("Initial Balance", value=st.session_state.starting_bal)
-    if st.button("FORZA REFRESH DATI"):
+    st.session_state.bal_iniziale = st.number_input("Capitale Iniziale", value=st.session_state.bal_iniziale)
+    if st.button("PULISCI CACHE DATI"):
         st.rerun()
