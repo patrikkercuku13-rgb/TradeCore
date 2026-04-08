@@ -31,6 +31,16 @@ st.markdown("""
     .pnl-neu { background-color: #161b22; color: #8b949e; }
     </style>
     """, unsafe_allow_html=True)
+/* Rende le metriche più leggibili su mobile */
+[data-testid="stMetricValue"] {
+    font-size: 1.8rem !important;
+}
+
+/* Allarga i tasti per le dita */
+.stButton>button {
+    height: 3em !important;
+    font-weight: bold !important;
+}
 
 # ==========================================
 # 2. FUNZIONI DI SISTEMA
