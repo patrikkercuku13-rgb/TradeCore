@@ -7,58 +7,44 @@ import plotly.graph_objects as go
 import plotly.express as px
 import calendar
 
-# ==========================================
-# 1. SETUP & DESIGN DI LIVELLO PROFESSIONALE
-# ==========================================
-st.set_page_config(page_title="TradeCore", layout="wide")
+# 1. CONFIGURAZIONE
+st.set_page_config(page_title="TRADECORE TERMINAL", layout="wide")
 
-# CREDENZIALI INSERITE
-SUPABASE_URL = "https://aurjuibhbuinxzirpjkt.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cmp1aWJoYnVpbnh6aXJwamt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODE0MjEsImV4cCI6MjA5MTA1NzQyMX0.xSZBDGACcF6yDpkvuKQZottdKINFM0JM3iuRrI987lE"
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# CREDENZIALI
+URL = "https://aurjuibhbuinxzirpjkt.supabase.co"
+KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cmp1aWJoYnVpbnh6aXJwamt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODE0MjEsImV4cCI6MjA5MTA1NzQyMX0.xSZBDGACcF6yDpkvuKQZottdKINFM0JM3iuRrI987lE"
+supabase: Client = create_client(URL, KEY)
 
-# CSS AVANZATO (Design Scuro, Calendario e Bottoni)
+# 2. DESIGN CSS BLINDATO
 st.markdown("""
-    <style>
+<style>
     .stApp { background-color: #0b0e14; color: #e1e4e8; }
-    .stMetric { background-color: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 15px; }
-    [data-testid="stMetricValue"] { color: #00ff88; font-family: 'Courier New', monospace; font-size: 1.8rem !important; }
-    
-    /* Calendario Grid */
+    .stMetric { background-color: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 10px; }
+    [data-testid="stMetricValue"] { color: #00ff88; font-family: monospace; font-size: 1.5rem !important; }
     .cal-day { 
-        min-height: 85px; border-radius: 10px; padding: 10px; 
+        min-height: 55px; border-radius: 5px; padding: 5px; 
         display: flex; flex-direction: column; align-items: center; 
-        justify-content: center; border: 1px solid #30363d; font-size: 14px;
-        transition: transform 0.2s;
+        justify-content: center; border: 1px solid #30363d; font-size: 11px;
     }
-    .cal-day:hover { transform: scale(1.02); border-color: #8b949e; }
-    .pnl-pos { background-color: rgba(0, 255, 136, 0.1); color: #00ff88; border: 1px solid #00ff88; }
-    .pnl-neg { background-color: rgba(255, 75, 75, 0.1); color: #ff4b4b; border: 1px solid #ff4b4b; }
+    .pnl-pos { background-color: rgba(0,255,136,0.1); color: #00ff88; border: 1px solid #00ff88; }
+    .pnl-neg { background-color: rgba(255,75,75,0.1); color: #ff4b4b; border: 1px solid #ff4b4b; }
     .pnl-neu { background-color: #161b22; color: #8b949e; }
-    
-    /* Bottoni Premium */
-    .stButton>button { 
-        width: 100%; border-radius: 8px; height: 3.5em; 
-        background: linear-gradient(135deg, #00ff88 0%, #00d4ff 100%); 
-        color: #000; font-weight: bold; border: none;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    .stButton>button { width: 100%; font-weight: bold; background: #00ff88; color: black; border-radius: 8px; }
+    .home-card { background: #1c2128; padding: 20px; border-radius: 15px; border-left: 5px solid #00ff88; margin-bottom: 20px; }
+</style>
+""", unsafe_allow_html=True)
 
-# ==========================================
-# 2. MOTORE LOGICO
-# ==========================================
-
+# 3. FUNZIONI
 def check_password():
     if "password_correct" not in st.session_state:
-        st.markdown("<h1 style='text-align:center;'>🚀 TRADECORE ACCESS</h1>", unsafe_allow_html=True)
-        pwd = st.text_input("Security Token", type="password")
-        if st.button("AUTHORIZE"):
+        st.markdown("<h2 style='text-align:center;'>🔐 TRADECORE LOGIN</h2>", unsafe_allow_html=True)
+        pwd = st.text_input("Access Token", type="password")
+        if st.button("UNLOCK"):
             if pwd == "2026":
                 st.session_state["password_correct"] = True
                 st.rerun()
             else:
-                st.error("TOKEN INVALIDO")
+                st.error("Denied")
         return False
     return True
 
@@ -74,147 +60,88 @@ def load_data():
     except:
         return pd.DataFrame()
 
-# ==========================================
-# 3. INTERFACCIA E NAVIGAZIONE
-# ==========================================
-
+# 4. MAIN APP
 if check_password():
     df = load_data()
     
-    # Inizializzazione Sessione Account
+    # Sidebar con Logo
+    st.sidebar.markdown("<h1 style='color:#00ff88; text-align:center;'>TRADECORE</h1>", unsafe_allow_html=True)
+    st.sidebar.image("https://cdn-icons-png.flaticon.com/512/12061/12061051.png", use_container_width=True)
+    menu = st.sidebar.radio("NAVIGAZIONE", ["🏠 Home", "📊 Dashboard", "📈 Analytics", "📝 Log Trade", "🧠 Psychology", "⚙️ Settings"])
+
     if "acc_size" not in st.session_state:
-        st.session_state.acc_size = 50000.0
-        st.session_state.acc_target = 5000.0
-        st.session_state.acc_max_dd = 2500.0
+        st.session_state.acc_size, st.session_state.acc_target, st.session_state.acc_max_dd = 50000.0, 5000.0, 2500.0
 
-    st.sidebar.title("⚡ TERMINAL v4")
-    menu = st.sidebar.radio("NAVIGAZIONE", ["🏠 Dashboard", "📈 Equity & Stats", "📝 Log Trade", "🧠 Psychology", "⚙️ Account Settings"])
-
-    # --- ⚙️ ACCOUNT SETTINGS ---
-    if menu == "⚙️ Account Settings":
-        st.header("⚙️ Configurazione Conto Prop")
-        c1, c2, c3 = st.columns(3)
-        st.session_state.acc_size = c1.number_input("Capitale Iniziale ($)", value=st.session_state.acc_size)
-        st.session_state.acc_target = c2.number_input("Target Profitto ($)", value=st.session_state.acc_target)
-        st.session_state.acc_max_dd = c3.number_input("Massimo Drawdown ($)", value=st.session_state.acc_max_dd)
-        st.success("Parametri aggiornati correttamente!")
-
-    # --- 📝 LOG TRADE (SISTEMA AVANZATO) ---
-    elif menu == "📝 Log Trade":
-        st.header("📝 Registrazione Esecuzione")
-        with st.form("trade_form"):
-            c1, c2 = st.columns(2)
-            asset = c1.selectbox("Asset", ["NASDAQ (NQ)", "S&P500 (ES)", "DAX", "EURUSD", "GOLD", "BTC"])
-            side = c1.radio("Direzione", ["LONG", "SHORT"], horizontal=True)
-            calc_type = c2.selectbox("Tipo Strumento", ["Futures (Contratti)", "Forex (Lotti)"])
-            size = c2.number_input("Quantità (Size)", min_value=0.01, step=0.01)
-            
-            entry = c1.number_input("Prezzo Entrata", format="%.5f")
-            exit_p = c2.number_input("Prezzo Uscita", format="%.5f")
-            
-            setup = st.selectbox("Setup Utilizzato", ["SMC - OrderBlock", "SMC - FVG", "Liquidity Sweep", "Breakout", "Mean Reversion"])
-            score = st.select_slider("Stato Mentale (1=Ansia, 5=Focus)", options=[1,2,3,4,5])
-            notes = st.text_area("Note sul Trade (Perché sei entrato? Cosa hai provato?)")
-            
-            if st.form_submit_button("REGISTRA TRADE"):
-                # Calcolo P&L Reale
-                if calc_type == "Forex (Lotti)":
-                    pnl = (exit_p - entry) * size * 100000 if side == "LONG" else (entry - exit_p) * size * 100000
-                else: # Futures Multipliers (Esempi comuni)
-                    mult = 20 if "NASDAQ" in asset else 50 if "S&P500" in asset else 25
-                    pnl = (exit_p - entry) * size * mult if side == "LONG" else (entry - exit_p) * size * mult
-                
-                new_trade = {
-                    "asset": asset, "pnl": pnl, "size": size, "setup": setup,
-                    "entry_price": entry, "exit_price": exit_p, "notes": notes, 
-                    "psychology_score": score, "exit_date": str(date.today())
-                }
-                supabase.table("trades").insert(new_trade).execute()
-                st.balloons()
-                st.success(f"Trade Salvato! Risultato: ${pnl:.2f}")
-
-    # --- 🏠 DASHBOARD E CALENDARIO ---
-    elif menu == "🏠 Dashboard":
-        st.header("🏠 Mission Control")
+    # --- HOME ---
+    if menu == "🏠 Home":
+        st.markdown("<div class='home-card'><h1>Benvenuto nel Terminale</h1><p>Status: Operativo</p></div>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.info("💡 Suggerimento: Controlla sempre il Drawdown prima di aprire nuove posizioni.")
+        with c2:
+            st.success(f"🎯 Target Rimanente: ${st.session_state.acc_target - (df['pnl'].sum() if not df.empty else 0):,.2f}")
+        
         if not df.empty:
-            total_pnl = df['pnl'].sum()
-            balance = st.session_state.acc_size + total_pnl
-            
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("BALANCE", f"${balance:,.2f}")
-            c2.metric("P&L TOTALE", f"${total_pnl:,.2f}", f"{(total_pnl/st.session_state.acc_size)*100:.2f}%")
-            c3.metric("DIST. TARGET", f"${st.session_state.acc_target - total_pnl:,.2f}")
-            c4.metric("DD LIMIT", f"${st.session_state.acc_size - st.session_state.acc_max_dd:,.2f}")
+            st.subheader("Ultimi Movimenti")
+            st.dataframe(df.tail(5), use_container_width=True)
 
-            # Barra progresso Target
-            prog = min(max(total_pnl / st.session_state.acc_target, 0.0), 1.0)
-            st.write(f"**Progresso Obiettivo: {prog*100:.1f}%**")
-            st.progress(prog)
+    # --- DASHBOARD + CALENDARIO ---
+    elif menu == "📊 Dashboard":
+        st.header("📊 Market Overview")
+        if not df.empty:
+            tpnl = df['pnl'].sum()
+            c1, c2, c3 = st.columns(3)
+            c1.metric("BALANCE", f"${st.session_state.acc_size + tpnl:,.2f}")
+            c2.metric("PROFITTO", f"${tpnl:,.2f}", f"{(tpnl/st.session_state.acc_size)*100:.1f}%")
+            c3.metric("DD LIMIT", f"${st.session_state.acc_size - st.session_state.acc_max_dd:,.2f}")
 
             st.divider()
-            # CALENDARIO DINAMICO
-            st.subheader("📅 Trading Calendar")
-            today = date.today()
-            cal = calendar.monthcalendar(today.year, today.month)
-            daily_pnl = df.groupby('exit_date')['pnl'].sum()
-            
-            cols_header = st.columns(7)
-            for i, d in enumerate(["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]):
-                cols_header[i].write(f"**{d}**")
+            st.subheader("📅 Calendario Profitti")
+            cal = calendar.monthcalendar(date.today().year, date.today().month)
+            daily = df.groupby('exit_date')['pnl'].sum()
             
             for week in cal:
                 cols = st.columns(7)
                 for i, day in enumerate(week):
-                    if day == 0:
-                        cols[i].write("")
-                    else:
-                        curr_date = date(today.year, today.month, day)
-                        val = daily_pnl.get(curr_date, 0)
-                        bg = "pnl-pos" if val > 0 else "pnl-neg" if val < 0 else "pnl-neu"
-                        cols[i].markdown(f"<div class='cal-day {bg}'><b>{day}</b><br>${val:.0f}</div>", unsafe_allow_html=True)
-        else:
-            st.info("Nessun dato. Inizia a loggare i tuoi trade!")
+                    if day != 0:
+                        cur = date(date.today().year, date.today().month, day)
+                        v = daily.get(cur, 0)
+                        bg = "pnl-pos" if v > 0 else "pnl-neg" if v < 0 else "pnl-neu"
+                        cols[i].markdown(f"<div class='cal-day {bg}'><b>{day}</b><br>${v:.0f}</div>", unsafe_allow_html=True)
 
-    # --- 📈 EQUITY & ANALYTICS ---
-    elif menu == "📈 Equity & Stats":
-        st.header("📈 Analisi Performance")
+    # --- ANALYTICS ---
+    elif menu == "📈 Analytics":
         if not df.empty:
-            df['cum_pnl'] = df['pnl'].cumsum() + st.session_state.acc_size
-            
-            col_a, col_b = st.columns([2, 1])
-            with col_a:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=df.index, y=df['cum_pnl'], fill='tozeroy', name='Equity', line=dict(color='#00ff88')))
-                fig.update_layout(template="plotly_dark", title="Equity Curve Globale")
-                st.plotly_chart(fig, use_container_width=True)
-            
-            with col_b:
-                st.subheader("Win Rate")
-                wins = len(df[df['pnl'] > 0])
-                wr = (wins / len(df)) * 100
-                st.metric("Win Rate", f"{wr:.1f}%")
-                st.plotly_chart(px.pie(values=[wins, len(df)-wins], names=['Profit', 'Loss'], color_discrete_sequence=['#00ff88', '#ff4b4b']), use_container_width=True)
+            df['equity'] = df['pnl'].cumsum() + st.session_state.acc_size
+            st.plotly_chart(px.area(df, x=df.index, y='equity', title="Equity Curve"), use_container_width=True)
+            st.plotly_chart(px.bar(df, x='exit_date', y='pnl', color='pnl', title="Performance Giornaliera"), use_container_width=True)
 
-    # --- 🧠 PSYCHOLOGY ---
-    elif menu == "🧠 Psychology":
-        st.header("🧠 Diario Psicologico")
-        if not df.empty:
+    # --- LOG TRADE ---
+    elif menu == "📝 Log Trade":
+        with st.form("t_form"):
             c1, c2 = st.columns(2)
-            with c1:/* Miglioramento Calendario Mobile */
-    .cal-day { 
-        min-height: 60px !important; /* Più basso su mobile */
-        padding: 4px !important;
-        font-size: 11px !important; /* Testo più piccolo */
-    }
-    
-    @media (max-width: 600px) {
-        [data-testid="stMetricValue"] { font-size: 1.2rem !important; }
-        .cal-day b { font-size: 10px; }
-        .cal-day small { display: none; } /* Nasconde il P&L testuale se lo schermo è troppo piccolo, lasciando solo il colore */
-    }
-            with c2:
-                st.plotly_chart(px.bar(df.groupby('setup')['pnl'].sum().reset_index(), x='setup', y='pnl', title="Profitto per Setup"), use_container_width=True)
-            
-            st.divider()
-            st.subheader("Ultimi Journal")
-            st.table(df[['exit_date', 'asset', 'psychology_score', 'notes']].tail(10))
+            asset = c1.selectbox("Asset", ["NASDAQ", "EURUSD", "GOLD", "BTC"])
+            calc = c1.selectbox("Tipo", ["Futures", "Forex"])
+            size = c2.number_input("Size", min_value=0.01)
+            side = c2.radio("Side", ["LONG", "SHORT"], horizontal=True)
+            entry = c1.number_input("Entry", format="%.5f")
+            exit_p = c2.number_input("Exit", format="%.5f")
+            score = st.select_slider("Mindset", options=[1,2,3,4,5])
+            note = st.text_area("Note")
+            if st.form_submit_button("SALVA"):
+                m = 20 if "NASDAQ" in asset else 100000 if calc == "Forex" else 50
+                res_pnl = (exit_p - entry) * size * m if side == "LONG" else (entry - exit_p) * size * m
+                supabase.table("trades").insert({"asset":asset, "pnl":res_pnl, "size":size, "notes":note, "psychology_score":score, "exit_date":str(date.today())}).execute()
+                st.success("Registrato!")
+
+    # --- PSICOLOGIA ---
+    elif menu == "🧠 Psychology":
+        if not df.empty:
+            st.plotly_chart(px.box(df, x="psychology_score", y="pnl", title="Mental State Analysis"), use_container_width=True)
+            st.dataframe(df[['exit_date', 'psychology_score', 'notes']].tail(10))
+
+    # --- SETTINGS ---
+    elif menu == "⚙️ Settings":
+        st.session_state.acc_size = st.number_input("Balance", value=st.session_state.acc_size)
+        st.session_state.acc_target = st.number_input("Target", value=st.session_state.acc_target)
+        st.session_state.acc_max_dd = st.number_input("Drawdown", value=st.session_state.acc_max_dd)
