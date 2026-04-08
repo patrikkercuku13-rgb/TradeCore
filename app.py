@@ -10,7 +10,7 @@ import calendar
 # ==========================================
 # 1. SETUP & DESIGN DI LIVELLO PROFESSIONALE
 # ==========================================
-st.set_page_config(page_title="TRADECORE TERMINAL v4.0", layout="wide")
+st.set_page_config(page_title="TradeCore", layout="wide")
 
 # CREDENZIALI INSERITE
 SUPABASE_URL = "https://aurjuibhbuinxzirpjkt.supabase.co"
