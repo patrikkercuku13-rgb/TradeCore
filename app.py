@@ -171,21 +171,32 @@ if check_password():
                     
                     cols[i].markdown(f"<div class='cal-day {cl}'>{day}<br><small>${val:,.0f}</small></div>", unsafe_allow_html=True)
 
-    # --- PAGINA 4: ANALYTICS ---
-    elif page == "📈 Analytics Avanzate":
-        st.title("Deep Performance Analysis")
+# --- PAGINA 4: ANALYTICS ---
+    elif page == "📈 Analytics":
+        st.title("Performance Insights")
         if not df_main.empty:
-            tab1, tab2, tab3 = st.tabs(["Performance per Asset", "Time Analysis", "Win/Loss Distribution"])
-            with tab1:
-                asset_pnl = df_main.groupby('asset')['pnl'].sum().reset_index()
-                st.plotly_chart(px.bar(asset_pnl, x='asset', y='pnl', color='pnl', template="plotly_dark"))
-            with tab2:
-                df_main['weekday'] = df_main['exit_date'].dt.day_name()
-                day_pnl = df_main.groupby('weekday')['pnl'].sum().reindex(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
-                st.plotly_chart(px.line(day_pnl, title="P&L by Day of Week", template="plotly_dark"))
-            with tab3:
-                fig_pie = px.pie(df_main, names=df_main['pnl'].apply(lambda x: 'Win' if x > 0 else 'Loss'), values=abs(df_main['pnl']), template="plotly_dark")
-                st.plotly_chart(fig_pie)
+            c1, c2 = st.columns(2)
+            
+            with c1:
+                # Equity Curve
+                df_sorted = df_main.sort_values('exit_date')
+                df_sorted['cum_pnl'] = df_sorted['pnl'].cumsum()
+                fig_line = px.line(df_sorted, x='exit_date', y='cum_pnl', 
+                                 title="Equity Curve", template="plotly_dark",
+                                 color_discrete_sequence=['#00ff88'])
+                st.plotly_chart(fig_line, use_container_width=True)
+            
+            with c2:
+                # Win Rate Pie
+                wins = len(df_main[df_main['pnl'] > 0])
+                losses = len(df_main[df_main['pnl'] <= 0])
+                fig_pie = px.pie(values=[wins, losses], names=['Win', 'Loss'], 
+                               title="Win Rate %",
+                               color_discrete_sequence=['#00ff88', '#ff4b4b'], 
+                               template="plotly_dark")
+                st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.warning("Nessun dato disponibile per le analisi.")
 
     # --- PAGINA 5: RISK CALCULATOR ---
     elif page == "🧮 Risk Calculator":
