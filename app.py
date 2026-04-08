@@ -6,164 +6,218 @@ from supabase import create_client, Client
 import plotly.graph_objects as go
 import plotly.express as px
 import calendar
-import os
 
-# --- CONFIGURAZIONE CORE ---
-st.set_page_config(page_title="TRADECORE ULTRA", layout="wide", initial_sidebar_state="expanded")
+# ==========================================
+# 1. CONFIGURAZIONE & BRANDING
+# ==========================================
+# Il logo apparirà nella scheda in alto del browser
+st.set_page_config(
+    page_title="TRADECORE TERMINAL",
+    page_icon="https://i.ibb.co/X3ZzCFr/logo-square.png",
+    layout="wide"
+)
 
-# --- CONNESSIONE DATABASE ---
+# CREDENZIALI SUPABASE
 URL = "https://aurjuibhbuinxzirpjkt.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cmp1aWJoYnVpbnh6aXJwamt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODE0MjEsImV4cCI6MjA5MTA1NzQyMX0.xSZBDGACcF6yDpkvuKQZottdKINFM0JM3iuRrI987lE"
 supabase: Client = create_client(URL, KEY)
 
-# --- DESIGN CSS AVANZATO ---
+# ==========================================
+# 2. DESIGN & STILE (CSS)
+# ==========================================
 st.markdown("""
 <style>
-    .stApp { background-color: #080808; color: #e1e4e8; }
+    .stApp { background-color: #080808; color: #ffffff; }
     [data-testid="stSidebar"] { background-color: #0c0c0c; border-right: 1px solid #1f1f1f; }
-    .stMetric { background-color: #111111; border: 1px solid #1f1f1f; border-radius: 12px; padding: 15px !important; }
-    [data-testid="stMetricValue"] { color: #00ff88; font-family: monospace; }
+    .stMetric { background: #111; border: 1px solid #222; border-radius: 12px; padding: 15px !important; }
+    [data-testid="stMetricValue"] { color: #00ff88 !important; font-family: 'Courier New', monospace; }
     
-    /* Calendario Responsivo */
-    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+    /* Calendario Professional */
     .cal-day { 
-        min-height: 65px; border-radius: 8px; padding: 8px; 
+        min-height: 70px; border-radius: 8px; padding: 10px; 
         display: flex; flex-direction: column; align-items: center; 
-        justify-content: center; border: 1px solid #1f1f1f; font-size: 12px;
+        justify-content: center; border: 1px solid #1f1f1f; font-size: 13px;
     }
-    .pnl-pos { background-color: rgba(0,255,136,0.1); color: #00ff88; border: 1px solid #00ff88; }
-    .pnl-neg { background-color: rgba(255,75,75,0.1); color: #ff4b4b; border: 1px solid #ff4b4b; }
-    .pnl-neu { background-color: #111111; color: #555555; }
+    .win { background: rgba(0, 255, 136, 0.1); color: #00ff88; border: 1px solid #00ff88; }
+    .loss { background: rgba(255, 75, 75, 0.1); color: #ff4b4b; border: 1px solid #ff4b4b; }
+    .neutral { background: #111; color: #555; }
     
-    /* Bottoni e Forms */
-    .stButton>button { width: 100%; font-weight: bold; background: #ffffff; color: #000; border-radius: 8px; height: 3em; }
-    div[data-baseweb="select"] > div { background-color: #111; border: 1px solid #1f1f1f; }
+    /* Tabella */
+    .stDataFrame { border: 1px solid #222; border-radius: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- CARICAMENTO IMMAGINI LOCALI ---
-def get_image(path):
-    if os.path.exists(path):
-        return path
-    return None
-
-logo_path = get_image("logo.png")
-header_path = get_image("header.png")
-
-# --- FUNZIONI LOGICA ---
-def check_password():
-    if "password_correct" not in st.session_state:
-        if header_path: st.image(header_path, width=300)
-        else: st.title("TRADECORE LOGIN")
-        pwd = st.text_input("Security Token", type="password")
-        if st.button("UNLOCK"):
-            if pwd == "2026":
-                st.session_state["password_correct"] = True
-                st.rerun()
-            else: st.error("Access Denied")
-        return False
-    return True
-
+# ==========================================
+# 3. MOTORE DATI
+# ==========================================
 @st.cache_data(ttl=2)
-def load_data():
+def fetch_data():
     try:
-        res = supabase.table("trades").select("*").order("exit_date").execute()
-        df = pd.DataFrame(res.data)
-        if not df.empty:
-            df['exit_date'] = pd.to_datetime(df['exit_date']).dt.date
-            df['pnl'] = df['pnl'].astype(float)
-            df['psychology_score'] = df['psychology_score'].astype(float)
-        return df
-    except: return pd.DataFrame()
+        res = supabase.table("trades").select("*").execute()
+        df_raw = pd.DataFrame(res.data)
+        if not df_raw.empty:
+            df_raw['exit_date'] = pd.to_datetime(df_raw['exit_date']).dt.date
+            df_raw['pnl'] = pd.to_numeric(df_raw['pnl'])
+            df_raw['psychology_score'] = pd.to_numeric(df_raw['psychology_score'])
+            return df_raw.sort_values('exit_date')
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Errore connessione: {e}")
+        return pd.DataFrame()
 
-# --- INTERFACCIA PRINCIPALE ---
-if check_password():
-    df = load_data()
+# ==========================================
+# 4. LOGICA ACCESSO
+# ==========================================
+if "authenticated" not in st.session_state:
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.image("https://i.ibb.co/C0b1Q54/tradecore-header.png", width=400)
+    token = st.text_input("Security Token", type="password")
+    if st.button("UNLOCK SYSTEM"):
+        if token == "2026":
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Token non valido.")
+    st.stop()
+
+# ==========================================
+# 5. NAVIGAZIONE SIDEBAR
+# ==========================================
+df = fetch_data()
+st.sidebar.image("https://i.ibb.co/X3ZzCFr/logo-square.png", width=120)
+st.sidebar.markdown("---")
+nav = st.sidebar.radio("COMMAND CENTER", ["🏠 Overview", "📈 Analytics", "📝 Log Trade", "📊 Dashboard", "🧠 Psychology", "⚙️ Settings"])
+
+if "balance" not in st.session_state:
+    st.session_state.balance = 50000.0
+    st.session_state.target = 5000.0
+
+# ==========================================
+# 6. PAGINE
+# ==========================================
+
+# --- OVERVIEW ---
+if nav == "🏠 Overview":
+    st.image("https://i.ibb.co/C0b1Q54/tradecore-header.png", use_container_width=True)
     
-    # Sidebar
-    if logo_path: st.sidebar.image(logo_path, width=100)
-    st.sidebar.title("COMMAND CENTER")
-    menu = st.sidebar.radio("MENU", ["🏠 Home", "📊 Dashboard", "📈 Analytics", "📝 Log Trade", "🧠 Psychology", "⚙️ Account Settings"])
+    net_pnl = df['pnl'].sum() if not df.empty else 0
+    current_bal = st.session_state.balance + net_pnl
+    
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("CURRENT BALANCE", f"${current_bal:,.2f}")
+    c2.metric("NET PNL", f"${net_pnl:,.2f}", f"{(net_pnl/st.session_state.balance)*100:.2f}%")
+    c3.metric("TRADES", len(df))
+    c4.metric("TARGET LEFT", f"${st.session_state.target - net_pnl:,.2f}")
+    
+    st.markdown("### Recenti")
+    if not df.empty:
+        st.dataframe(df.sort_values('exit_date', ascending=False), use_container_width=True)
+    else:
+        st.info("Nessun dato presente. Vai su 'Log Trade'.")
 
-    if "acc_size" not in st.session_state:
-        st.session_state.acc_size, st.session_state.acc_target, st.session_state.acc_max_dd = 50000.0, 5000.0, 2500.0
+# --- ANALYTICS (TORNARE AL TOP) ---
+elif nav == "📈 Analytics":
+    st.header("📈 Deep Performance Analytics")
+    if not df.empty:
+        # Calcoli Statistici
+        wins = df[df['pnl'] > 0]
+        losses = df[df['pnl'] <= 0]
+        win_rate = (len(wins) / len(df)) * 100
+        avg_win = wins['pnl'].mean() if not wins.empty else 0
+        avg_loss = losses['pnl'].mean() if not losses.empty else 0
+        pf = abs(wins['pnl'].sum() / losses['pnl'].sum()) if not losses.empty and losses['pnl'].sum() != 0 else 0
+        
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Win Rate", f"{win_rate:.1f}%")
+        c2.metric("Profit Factor", f"{pf:.2f}")
+        c3.metric("Avg Win", f"${avg_win:,.2f}")
+        c4.metric("Avg Loss", f"${avg_loss:,.2f}")
+        
+        st.divider()
+        
+        # Grafico Equity
+        df['equity'] = df['pnl'].cumsum() + st.session_state.balance
+        fig_equity = px.area(df, x='exit_date', y='equity', title="Equity Curve Globale",
+                            color_discrete_sequence=['#00ff88'])
+        fig_equity.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig_equity, use_container_width=True)
+        
+        # Asset Performance
+        asset_pnl = df.groupby('asset')['pnl'].sum().reset_index()
+        fig_asset = px.bar(asset_pnl, x='asset', y='pnl', title="Profitto per Asset",
+                          color='pnl', color_continuous_scale='RdYlGn')
+        fig_asset.update_layout(template="plotly_dark")
+        st.plotly_chart(fig_asset, use_container_width=True)
+    else:
+        st.warning("Dati insufficienti per generare le analisi.")
 
-    # --- 🏠 HOME ---
-    if menu == "🏠 Home":
-        if header_path: st.image(header_path, use_container_width=True)
-        st.subheader("Account Status")
-        tpnl = df['pnl'].sum() if not df.empty else 0
-        c1, c2, c3 = st.columns(3)
-        c1.metric("CURRENT BALANCE", f"${st.session_state.acc_size + tpnl:,.2f}")
-        c2.metric("TOTAL PNL", f"${tpnl:,.2f}")
-        c3.metric("PROP TARGET", f"${st.session_state.acc_target - tpnl:,.2f}")
-
-    # --- 📝 LOG TRADE (SISTEMA COMPLETO) ---
-    elif menu == "📝 Log Trade":
-        st.header("📝 New Execution")
-        with st.form("trade_form"):
-            c1, c2 = st.columns(2)
-            asset = c1.selectbox("Asset", ["NASDAQ", "EURUSD", "GOLD", "S&P500", "DAX", "BTC"])
-            calc_type = c1.selectbox("Engine", ["Futures (Contratti)", "Forex (Lotti)"])
-            side = c1.radio("Side", ["LONG", "SHORT"], horizontal=True)
+# --- LOG TRADE ---
+elif nav == "📝 Log Trade":
+    st.header("📝 Registra Esecuzione")
+    with st.form("trade_entry"):
+        col1, col2 = st.columns(2)
+        asset = col1.selectbox("Asset", ["NASDAQ", "EURUSD", "GOLD", "S&P500", "DAX", "BTC"])
+        engine = col1.selectbox("Calcolo", ["Futures", "Forex"])
+        side = col1.radio("Direzione", ["LONG", "SHORT"], horizontal=True)
+        
+        size = col2.number_input("Size (Lotti/Contratti)", min_value=0.01, step=0.01, value=1.0)
+        entry = col2.number_input("Prezzo Entrata", format="%.5f")
+        exit_p = col2.number_input("Prezzo Uscita", format="%.5f")
+        
+        score = st.select_slider("Stato Mentale", options=[1,2,3,4,5], value=5)
+        note = st.text_area("Journaling / Note")
+        
+        if st.form_submit_button("SALVA TRADE"):
+            # Calcolo PNL
+            mult = 20 if "NASDAQ" in asset else 100000 if engine == "Forex" else 50
+            res_pnl = (exit_p - entry) * size * mult if side == "LONG" else (entry - exit_p) * size * mult
             
-            size = c2.number_input("Size", min_value=0.01, step=0.01)
-            entry = c2.number_input("Entry Price", format="%.5f")
-            exit_p = c2.number_input("Exit Price", format="%.5f")
+            supabase.table("trades").insert({
+                "asset": asset, "pnl": res_pnl, "size": size, 
+                "notes": note, "psychology_score": score, 
+                "exit_date": str(date.today())
+            }).execute()
             
-            score = st.select_slider("Psych Score (1-5)", options=[1,2,3,4,5], value=5)
-            notes = st.text_area("Trade Journal / Emotional State")
-            
-            if st.form_submit_button("SAVE EXECUTION"):
-                if calc_type == "Forex (Lotti)": mult = 100000
-                else: mult = 20 if "NASDAQ" in asset else 50
-                
-                pnl = (exit_p - entry) * size * mult if side == "LONG" else (entry - exit_p) * size * mult
-                supabase.table("trades").insert({
-                    "asset": asset, "pnl": pnl, "size": size, "notes": notes, 
-                    "psychology_score": score, "exit_date": str(date.today())
-                }).execute()
-                st.success(f"Trade registrato! PNL: ${pnl:.2f}")
+            st.cache_data.clear()
+            st.success(f"Trade Registrato! PNL: ${res_pnl:.2f}")
+            st.balloons()
 
-    # --- 📊 DASHBOARD & CALENDARIO ---
-    elif menu == "📊 Dashboard":
-        st.header("📊 Performance Monitor")
-        if not df.empty:
-            tpnl = df['pnl'].sum()
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("BALANCE", f"${st.session_state.acc_size + tpnl:,.2f}")
-            c2.metric("PNL NET", f"${tpnl:,.2f}")
-            c3.metric("DIST. TARGET", f"${st.session_state.acc_target - tpnl:,.2f}")
-            c4.metric("MAX DD", f"${st.session_state.acc_size - st.session_state.acc_max_dd:,.2f}")
+# --- DASHBOARD (CALENDARIO) ---
+elif nav == "📊 Dashboard":
+    st.header("📅 Calendario Operativo")
+    if not df.empty:
+        daily_pnl = df.groupby('exit_date')['pnl'].sum()
+        cal = calendar.monthcalendar(date.today().year, date.today().month)
+        
+        # Header Giorni
+        days_header = st.columns(7)
+        for i, d in enumerate(["LUN", "MAR", "MER", "GIO", "VEN", "SAB", "DOM"]):
+            days_header[i].markdown(f"<p style='text-align:center; color:#888;'>{d}</p>", unsafe_allow_html=True)
             
-            st.divider()
-            st.subheader("📅 Profit Calendar")
-            cal = calendar.monthcalendar(date.today().year, date.today().month)
-            daily = df.groupby('exit_date')['pnl'].sum()
-            
-            for week in cal:
-                cols = st.columns(7)
-                for i, day in enumerate(week):
-                    if day != 0:
-                        cur = date(date.today().year, date.today().month, day)
-                        v = daily.get(cur, 0)
-                        bg = "pnl-pos" if v > 0 else "pnl-neg" if v < 0 else "pnl-neu"
-                        cols[i].markdown(f"<div class='cal-day {bg}'><b>{day}</b><br>${v:.0f}</div>", unsafe_allow_html=True)
-        else: st.warning("Dati non disponibili.")
+        for week in cal:
+            cols = st.columns(7)
+            for i, day in enumerate(week):
+                if day != 0:
+                    curr_date = date(date.today().year, date.today().month, day)
+                    val = daily_pnl.get(curr_date, 0)
+                    bg_class = "win" if val > 0 else "loss" if val < 0 else "neutral"
+                    cols[i].markdown(f"<div class='cal-day {bg_class}'><b>{day}</b><br>${val:.0f}</div>", unsafe_allow_html=True)
 
-    # --- 🧠 PSYCHOLOGY ---
-    elif menu == "🧠 Psychology":
-        st.header("🧠 Emotional Analytics")
-        if not df.empty:
-            if len(df) > 1:
-                st.plotly_chart(px.box(df, x="psychology_score", y="pnl", title="Mindset vs Results"), use_container_width=True)
-            st.subheader("Journal Notes")
-            st.table(df[['exit_date', 'asset', 'psychology_score', 'notes']].tail(10))
+# --- PSICOLOGIA ---
+elif nav == "🧠 Psychology":
+    st.header("🧠 Analisi Comportamentale")
+    if not df.empty:
+        st.plotly_chart(px.box(df, x="psychology_score", y="pnl", title="Mindset vs Performance",
+                             color_discrete_sequence=['#00ff88']).update_layout(template="plotly_dark"))
+        st.markdown("### Ultime Note Diario")
+        st.table(df[['exit_date', 'asset', 'notes', 'psychology_score']].tail(10))
 
-    # --- ⚙️ ACCOUNT SETTINGS ---
-    elif menu == "⚙️ Account Settings":
-        st.header("⚙️ Prop Firm Settings")
-        st.session_state.acc_size = st.number_input("Starting Capital", value=st.session_state.acc_size)
-        st.session_state.acc_target = st.number_input("Profit Target", value=st.session_state.acc_target)
-        st.session_state.acc_max_dd = st.number_input("Max Drawdown Limit", value=st.session_state.acc_max_dd)
-        if st.button("Save Configuration"): st.success("Settings Updated!")
+# --- SETTINGS ---
+elif nav == "⚙️ Settings":
+    st.header("⚙️ Parametri Account")
+    st.session_state.balance = st.number_input("Capitale Prop Firm ($)", value=st.session_state.balance)
+    st.session_state.target = st.number_input("Obiettivo Profitto ($)", value=st.session_state.target)
+    
+    if st.button("RESET DATABASE CACHE"):
+        st.cache_data.clear()
+        st.rerun()
