@@ -53,11 +53,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 # ==========================================
-# 3. LOGICA PRINCIPALE
-# ==========================================
-if check_password():
-    df_main = load_data() 
-    # ==========================================
 # 3. FUNZIONI DI SISTEMA (SOPRA IL MAIN)
 # ==========================================
 
@@ -81,7 +76,6 @@ if check_password():
     # Qui dentro va tutto il resto del tuo codice (Dashboard, Diario, ecc.)
     df_main = load_data()
     # ... resto del codice ...
-    
     # Sidebar
     st.sidebar.title("⚡ TRADECORE v3")
     page = st.sidebar.radio("Menu", [
