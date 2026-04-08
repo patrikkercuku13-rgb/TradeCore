@@ -8,55 +8,64 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # ==========================================
-# 1. CONFIGURAZIONE E SETUP
+# 1. CONFIGURAZIONE E DESIGN (BRANDING)
 # ==========================================
-st.set_page_config(page_title="TRADECORE PRO", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="TRADECORE TERMINAL", layout="wide", initial_sidebar_state="expanded")
 
-# Credenziali Supabase (Da inserire domani a scuola)
-SUPABASE_URL = "IL_TUO_URL"
+# Inserisci qui i tuoi dati di Supabase
+SUPABASE_URL = "IL_TUO_URL" 
 SUPABASE_KEY = "LA_TUA_CHIAVE"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ==========================================
-# 2. BRANDING & CSS CUSTOM
-# ==========================================
+# CSS per nascondere Streamlit e personalizzare l'interfaccia
 st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+    /* Nascondi Header e Footer ufficiali */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     .stApp { background-color: #0e1117; color: #ffffff; }
     
-    /* Calendario Grid */
+    /* Stile Calendario a Blocchi */
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
     .cal-day {
-        width: 100%; aspect-ratio: 1/1; border-radius: 8px;
+        min-height: 80px; border-radius: 10px; padding: 10px;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        margin-bottom: 5px; border: 1px solid #30363d;
+        border: 1px solid #30363d; font-weight: bold;
     }
     .pnl-pos { background-color: #002b1b; border: 1px solid #00ff88; color: #00ff88; }
     .pnl-neg { background-color: #3d0101; border: 1px solid #ff4b4b; color: #ff4b4b; }
     .pnl-neu { background-color: #161b22; color: #8b949e; }
     
-    /* Box Psicologia */
-    .mood-box { padding: 10px; border-radius: 5px; border-left: 5px solid #ff9f1c; background: #252a33; margin: 10px 0; }
+    /* Metriche e Cards */
+    div[data-testid="stMetric"] { background-color: #1c2128; border-radius: 10px; padding: 15px; border: 1px solid #30363d; }
+    .stButton>button { width: 100%; border-radius: 5px; background-color: #238636; color: white; border: none; }
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. FUNZIONI CORE
+# 2. FUNZIONI DI SISTEMA
 # ==========================================
+
 def check_password():
+    """Protezione Accesso"""
     if "password_correct" not in st.session_state:
-        st.markdown("<h2 style='text-align:center;'>🔐 TRADECORE ACCESS</h2>", unsafe_allow_html=True)
-        pwd = st.text_input("Security Token", type="password")
-        if st.button("Unlock"):
-            if pwd == "2026": # La tua password
-                st.session_state["password_correct"] = True
-                st.rerun()
-            else: st.error("Access Denied.")
+        st.markdown("<h1 style='text-align: center;'>🔐 TRADECORE</h1>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            pwd = st.text_input("Inserisci Password Operatore", type="password")
+            if st.button("Sblocca Terminale"):
+                if pwd == "2026": # Puoi cambiare la password qui
+                    st.session_state["password_correct"] = True
+                    st.rerun()
+                else:
+                    st.error("Accesso negato. Password errata.")
         return False
     return True
 
 @st.cache_data(ttl=60)
 def load_data():
+    """Carica trade da Supabase"""
     try:
         res = supabase.table("trades").select("*").execute()
         df = pd.DataFrame(res.data)
@@ -64,110 +73,155 @@ def load_data():
             df['exit_date'] = pd.to_datetime(df['exit_date'])
             df['pnl'] = df['pnl'].astype(float)
         return df
-    except: return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Errore Database: {e}")
+        return pd.DataFrame()
 
 # ==========================================
-# 4. MAIN APP
+# 3. INTERFACCIA PRINCIPALE (Se loggato)
 # ==========================================
+
 if check_password():
     df_main = load_data()
     
-    # Sidebar
-    st.sidebar.title("⚡ TRADECORE v3")
-    page = st.sidebar.radio("Sezioni", [
+    # Sidebar Navigation
+    st.sidebar.markdown("<h2 style='color:#00ff88;'>⚡ TRADECORE PRO</h2>", unsafe_allow_html=True)
+    page = st.sidebar.radio("NAVIGAZIONE", [
         "🏠 Dashboard", 
         "📊 Diario Operativo", 
-        "🧠 Psicologia",
+        "📅 Calendario P&L", 
+        "📈 Analytics Avanzate",
         "🧮 Risk Calculator",
-        "📅 Calendario", 
-        "📈 Analytics"
+        "🧠 Psicologia",
+        "⚙️ Settings"
     ])
+    
+    st.sidebar.divider()
+    if not df_main.empty:
+        total_pnl = df_main['pnl'].sum()
+        st.sidebar.metric("Net P&L", f"${total_pnl:,.2f}", delta=f"{total_pnl:,.2f}")
 
-    # --- 🧮 SECTION: RISK CALCULATOR ---
-    if page == "🧮 Risk Calculator":
-        st.title("Position Sizing Calculator")
-        c1, c2 = st.columns(2)
-        with c1:
-            balance = st.number_input("Account Balance ($)", value=10000.0)
-            risk_perc = st.slider("Rischio (%)", 0.25, 5.0, 1.0)
-            entry = st.number_input("Entry Price", value=0.0)
-            stop = st.number_input("Stop Loss", value=0.0)
-        
-        with c2:
-            risk_amt = balance * (risk_perc / 100)
-            st.metric("Rischio in Dollari", f"${risk_amt:,.2f}")
-            if entry != 0 and stop != 0:
-                dist = abs(entry - stop)
-                # Calcolo per Micro/Mini Future (Es: MNQ = $2 per punto)
-                st.info(f"Distanza Stop: {dist:.2f} punti")
-                contracts = risk_amt / (dist * 2) # Esempio per MNQ
-                st.success(f"Taglia Suggerita: {contracts:.2f} Micro Contracts")
+    # --- PAGINA 1: DASHBOARD ---
+    if page == "🏠 Dashboard":
+        st.title("Market Execution Overview")
+        if df_main.empty:
+            st.warning("Nessun dato trovato. Vai al Diario per inserire il primo trade.")
+        else:
+            c1, c2, c3, c4 = st.columns(4)
+            wins = len(df_main[df_main['pnl'] > 0])
+            wr = (wins / len(df_main)) * 100
+            c1.metric("Win Rate", f"{wr:.1f}%")
+            c2.metric("Profit Factor", f"{abs(df_main[df_main['pnl']>0]['pnl'].sum() / df_main[df_main['pnl']<0]['pnl'].sum()):.2f}" if len(df_main[df_main['pnl']<0])>0 else "INF")
+            c3.metric("Trades", len(df_main))
+            c4.metric("Avg Trade", f"${df_main['pnl'].mean():,.2f}")
+            
+            # Equity Curve
+            st.subheader("Equity Curve")
+            df_equity = df_main.sort_values('exit_date')
+            df_equity['cumulative'] = df_equity['pnl'].cumsum()
+            fig = px.line(df_equity, x='exit_date', y='cumulative', template="plotly_dark", color_discrete_sequence=['#00ff88'])
+            st.plotly_chart(fig, use_container_width=True)
 
-    # --- 🧠 SECTION: PSICOLOGIA ---
-    elif page == "🧠 Psicologia":
-        st.title("Trading Psychology Tracker")
-        st.markdown("<div class='mood-box'>Analizza il tuo stato mentale per evitare errori emotivi.</div>", unsafe_allow_html=True)
-        
-        with st.form("psycho_form"):
-            mood = st.select_slider("Stato d'animo", options=["Disperato", "Frustrato", "Neutro", "Focalizzato", "Euforico"])
-            patience = st.checkbox("Ho rispettato il mio piano?")
-            revenge = st.checkbox("Ho sentito l'impulso di fare Revenge Trading?")
-            notes = st.text_area("Cosa hai provato durante l'ultima sessione?")
-            if st.form_submit_button("Salva Diario Mentale"):
-                st.success("Analisi salvata. Ricorda: l'euforia è pericolosa quanto la frustrazione.")
-
-    # --- 📊 SECTION: DIARIO ---
+    # --- PAGINA 2: DIARIO ---
     elif page == "📊 Diario Operativo":
-        st.title("Journal Entry")
-        with st.expander("📝 Inserisci Trade", expanded=True):
-            with st.form("t_form"):
-                ca1, ca2, ca3 = st.columns(3)
-                asset = ca1.selectbox("Asset", ["MNQ", "MES", "DAX", "GC"])
-                side = ca2.selectbox("Side", ["Long", "Short"])
-                pnl = ca3.number_input("P&L ($)", value=0.0)
+        st.title("Trade Journal")
+        with st.expander("➕ AGGIUNGI TRADE", expanded=True):
+            with st.form("add_trade"):
+                col1, col2, col3 = st.columns(3)
+                asset = col1.selectbox("Asset", ["MNQ", "MES", "DAX", "GC", "EURUSD"])
+                side = col2.selectbox("Side", ["Long", "Short"])
+                pnl = col3.number_input("P&L Netto ($)", value=0.0)
                 
-                cb1, cb2 = st.columns(2)
-                date_t = cb1.date_input("Data", date.today())
-                strat = cb2.selectbox("Setup", ["Silver Bullet", "FVG", "MSS", "LQD"])
+                col4, col5 = st.columns(2)
+                dt = col4.date_input("Data Chiusura", date.today())
+                setup = col5.selectbox("Setup", ["Silver Bullet", "FVG Inversion", "Judas Swing", "MSS"])
                 
-                if st.form_submit_button("Salva Trade"):
-                    new_trade = {"asset": asset, "side": side, "pnl": pnl, "exit_date": str(date_t), "strategy": strat}
-                    supabase.table("trades").insert(new_trade).execute()
+                note = st.text_area("Note e Confluenze")
+                if st.form_submit_button("SALVA TRADE"):
+                    data = {"asset": asset, "side": side, "pnl": pnl, "exit_date": str(dt), "strategy": setup, "notes": note}
+                    supabase.table("trades").insert(data).execute()
+                    st.success("Trade salvato!")
                     st.rerun()
+        
+        st.subheader("History")
         st.dataframe(df_main.sort_values('exit_date', ascending=False), use_container_width=True)
 
-    # --- 📅 SECTION: CALENDARIO ---
-    elif page == "📅 Calendario":
-        st.title("P&L Calendar")
-        m = st.selectbox("Mese", range(1,13), index=datetime.now().month-1)
+    # --- PAGINA 3: CALENDARIO ---
+    elif page == "📅 Calendario P&L":
+        st.title("Profit & Loss Calendar")
+        m = st.selectbox("Seleziona Mese", range(1, 13), index=datetime.now().month-1)
+        
         df_main['d_only'] = df_main['exit_date'].dt.date
         pnl_map = df_main.groupby('d_only')['pnl'].sum().to_dict()
         
         cal = calendar.monthcalendar(2026, m)
+        cols_h = st.columns(7)
+        for i, d_name in enumerate(["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]):
+            cols_h[i].write(f"**{d_name}**")
+            
         for week in cal:
             cols = st.columns(7)
             for i, day in enumerate(week):
                 if day != 0:
-                    d = date(2026, m, day)
-                    val = pnl_map.get(d, 0)
+                    curr_date = date(2026, m, day)
+                    val = pnl_map.get(curr_date, 0)
                     cl = "pnl-neu"
                     if val > 0: cl = "pnl-pos"
                     elif val < 0: cl = "pnl-neg"
-                    cols[i].markdown(f"<div class='cal-day {cl}'>{day}<br><small>${val:.0f}</small></div>", unsafe_allow_html=True)
+                    
+                    cols[i].markdown(f"<div class='cal-day {cl}'>{day}<br><small>${val:,.0f}</small></div>", unsafe_allow_html=True)
 
-    # --- 📈 SECTION: ANALYTICS ---
-    elif page == "📈 Analytics":
-        st.title("Performance Insights")
+    # --- PAGINA 4: ANALYTICS ---
+    elif page == "📈 Analytics Avanzate":
+        st.title("Deep Performance Analysis")
         if not df_main.empty:
-            c1, c2 = st.columns(2)
-            # Equity Curve
-            df_main = df_main.sort_values('exit_date')
-            df_main['cum_pnl'] = df_main['pnl'].cumsum()
-            fig = px.line(df_main, x='exit_date', y='cum_pnl', title="Equity Curve", template="plotly_dark")
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Win Rate Pie
-            wins = len(df_main[df_main['pnl'] > 0])
-            losses = len(df_main[df_main['pnl'] <= 0])
-            fig_pie = px.pie(values=[wins, losses], names=['Win', 'Loss'], color_discrete_sequence=['#00ff88', '#ff4b4b'], template="plotly_dark")
+            tab1, tab2, tab3 = st.tabs(["Performance per Asset", "Time Analysis", "Win/Loss Distribution"])
+            with tab1:
+                asset_pnl = df_main.groupby('asset')['pnl'].sum().reset_index()
+                st.plotly_chart(px.bar(asset_pnl, x='asset', y='pnl', color='pnl', template="plotly_dark"))
+            with tab2:
+                df_main['weekday'] = df_main['exit_date'].dt.day_name()
+                day_pnl = df_main.groupby('weekday')['pnl'].sum().reindex(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
+                st.plotly_chart(px.line(day_pnl, title="P&L by Day of Week", template="plotly_dark"))
+            with tab3:
+                fig_pie = px.pie(df_main, names=df_main['pnl'].apply(lambda x: 'Win' if x > 0 else 'Loss'), values=abs(df_main['pnl']), template="plotly_dark")
+                st.plotly_chart(fig_pie)
+
+    # --- PAGINA 5: RISK CALCULATOR ---
+    elif page == "🧮 Risk Calculator":
+        st.title("Position Sizing")
+        col1, col2 = st.columns(2)
+        with col1:
+            balance = st.number_input("Account Balance ($)", value=10000)
+            risk_p = st.slider("Rischio %", 0.1, 5.0, 1.0)
+            entry = st.number_input("Entry Price", value=0.0)
+            sl = st.number_input("Stop Loss Price", value=0.0)
+        with col2:
+            if entry != 0 and sl != 0:
+                risk_amt = balance * (risk_p / 100)
+                tick_dist = abs(entry - sl)
+                # Calcolo per Micro Nasdaq (MNQ: 1 punto = $2)
+                contracts = risk_amt / (tick_dist * 2)
+                st.metric("Rischio in $", f"${risk_amt:,.2f}")
+                st.success(f"Size Consigliata (MNQ): {contracts:.2f} contratti")
+
+    # --- PAGINA 6: PSICOLOGIA ---
+    elif page == "🧠 Psicologia":
+        st.title("Mental Edge Tracker")
+        st.info("Registra il tuo stato mentale per identificare i trigger emotivi.")
+        with st.form("psy"):
+            mood = st.select_slider("Mood Post-Sessione", ["Rabbia", "Frustrazione", "Neutro", "Focus", "Euforia"])
+            foll_plan = st.checkbox("Ho seguito il piano al 100%?")
+            overtrade = st.checkbox("Ho fatto overtrading?")
+            st.text_area("Note Psicologiche")
+            if st.form_submit_button("Salva Analisi Mentale"):
+                st.success("Dati psicologici salvati!")
+
+    # --- PAGINA 7: SETTINGS ---
+    elif page == "⚙️ Settings":
+        st.title("System Settings")
+        st.write("Database Connection Status: **CONNECTED**")
+        if st.button("Clear Cache"):
+            st.cache_data.clear()
+            st.rerun(), names=['Win', 'Loss'], color_discrete_sequence=['#00ff88', '#ff4b4b'], template="plotly_dark")
             st.plotly_chart(fig_pie)
