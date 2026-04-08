@@ -171,7 +171,7 @@ if check_password():
                     
                     cols[i].markdown(f"<div class='cal-day {cl}'>{day}<br><small>${val:,.0f}</small></div>", unsafe_allow_html=True)
 
-# --- PAGINA 4: ANALYTICS ---
+    # --- PAGINA: ANALYTICS ---
     elif page == "📈 Analytics":
         st.title("Performance Insights")
         if not df_main.empty:
@@ -187,10 +187,11 @@ if check_password():
                 st.plotly_chart(fig_line, use_container_width=True)
             
             with c2:
-                # Win Rate Pie
+                # Win Rate Pie - CORRETTO SENZA RERUN IN MEZZO
                 wins = len(df_main[df_main['pnl'] > 0])
                 losses = len(df_main[df_main['pnl'] <= 0])
-                fig_pie = px.pie(values=[wins, losses], names=['Win', 'Loss'], 
+                fig_pie = px.pie(values=[wins, losses], 
+                               names=['Win', 'Loss'], 
                                title="Win Rate %",
                                color_discrete_sequence=['#00ff88', '#ff4b4b'], 
                                template="plotly_dark")
