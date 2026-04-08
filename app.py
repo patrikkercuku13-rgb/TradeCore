@@ -200,8 +200,18 @@ if check_password():
         st.header("🧠 Diario Psicologico")
         if not df.empty:
             c1, c2 = st.columns(2)
-            with c1:
-                st.plotly_chart(px.box(df, x="psychology_score", y="pnl", title="P&L vs Stato Mentale"), use_container_width=True)
+            with c1:/* Miglioramento Calendario Mobile */
+    .cal-day { 
+        min-height: 60px !important; /* Più basso su mobile */
+        padding: 4px !important;
+        font-size: 11px !important; /* Testo più piccolo */
+    }
+    
+    @media (max-width: 600px) {
+        [data-testid="stMetricValue"] { font-size: 1.2rem !important; }
+        .cal-day b { font-size: 10px; }
+        .cal-day small { display: none; } /* Nasconde il P&L testuale se lo schermo è troppo piccolo, lasciando solo il colore */
+    }
             with c2:
                 st.plotly_chart(px.bar(df.groupby('setup')['pnl'].sum().reset_index(), x='setup', y='pnl', title="Profitto per Setup"), use_container_width=True)
             
